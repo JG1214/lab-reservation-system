@@ -7,10 +7,12 @@ import com.example.reservation.common.UserContext;
 import com.example.reservation.dto.AuditDTO;
 import com.example.reservation.dto.ReservationDTO;
 import com.example.reservation.entity.Classroom;
+import com.example.reservation.entity.LabOpenSlot;
 import com.example.reservation.entity.Reservation;
 import com.example.reservation.entity.SysUser;
 import com.example.reservation.entity.UserFavorite;
 import com.example.reservation.mapper.ClassroomMapper;
+import com.example.reservation.mapper.LabOpenSlotMapper;
 import com.example.reservation.mapper.ReservationMapper;
 import com.example.reservation.mapper.SysUserMapper;
 import com.example.reservation.mapper.UserFavoriteMapper;
@@ -92,6 +94,9 @@ class ConcurrencyIntegrationTest {
     @Autowired
     private ClassroomMapper classroomMapper;
 
+    @Autowired
+    private LabOpenSlotMapper labOpenSlotMapper;
+
     /** 本类专用的测试用户 ID（隔离收藏数据，避免污染种子用户的收藏） */
     private Long testUserId;
 
@@ -110,6 +115,9 @@ class ConcurrencyIntegrationTest {
                 "并发用例依赖至少 " + REQUIRED_CLASSROOMS + " 间启用教室，请先导入 database/init_db.sql");
         this.enabledClassroomIds = rooms.stream().map(Classroom::getId).toList();
         this.classroomId = enabledClassroomIds.get(0);
+        // V4.0 规则 3：提交路径先校验开放时段，故为已启用教室补齐 TEST_DATE 当天的全天开放时段，
+        // 否则用例会被「该实验室在所选日期未开放」提前拦截，测不到冲突/并发语义
+        ensureOpenSlots();
 
         // 专用测试用户：username 带纳秒后缀，避免多次运行/并行运行撞唯一索引
         SysUser user = new SysUser();
@@ -130,6 +138,9 @@ class ConcurrencyIntegrationTest {
         favoriteMapper.delete(new LambdaQueryWrapper<UserFavorite>()
                 .eq(UserFavorite::getUserId, testUserId));
         userMapper.deleteById(testUserId);
+        // 清掉本类补的开放时段，保证演示数据零残留
+        labOpenSlotMapper.delete(new LambdaQueryWrapper<LabOpenSlot>()
+                .eq(LabOpenSlot::getStartDate, TEST_DATE));
         UserContext.clear();
     }
 
@@ -253,6 +264,28 @@ class ConcurrencyIntegrationTest {
     }
 
     /* ==================== 测试数据与统计辅助 ==================== */
+
+    /**
+     * 为所有启用教室补一条覆盖 TEST_DATE 的开放时段（08:00-22:00，容量取教室容量的 10 倍）。
+     * <p>
+     * 容量刻意放大：本类验证的是并发互斥语义，不是容量上限，容量过大可让用例不受规则 2 干扰。
+     */
+    private void ensureOpenSlots() {
+        for (Classroom room : classroomMapper.selectList(new LambdaQueryWrapper<Classroom>()
+                .eq(Classroom::getStatus, Constants.CLASSROOM_STATUS_ENABLED))) {
+            LabOpenSlot slot = new LabOpenSlot();
+            slot.setClassroomId(room.getId());
+            slot.setStartDate(TEST_DATE);
+            slot.setEndDate(TEST_DATE);
+            slot.setWeekDays("1,2,3,4,5,6,7");
+            slot.setOpenTime(LocalTime.of(8, 0));
+            slot.setCloseTime(LocalTime.of(22, 0));
+            slot.setSlotCapacity(room.getCapacity() == null ? 200 : room.getCapacity() * 10);
+            slot.setStatus(Constants.SLOT_STATUS_ENABLED);
+            slot.setRemark("并发集成测试专用");
+            labOpenSlotMapper.insert(slot);
+        }
+    }
 
     /** 直接落库一条预约（绕开业务校验，用于构造已通过/待审核前置数据） */
     private long insertReservation(Long userId, LocalTime start, LocalTime end, int status) {
