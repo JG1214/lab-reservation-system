@@ -18,14 +18,14 @@ const QUICK_RANGES = [
 
 const TODAY = dayjs().format('YYYY-MM-DD')
 
-const CHARTS = ['教室使用率排行', '热门时段分布', '月度预约趋势']
+const CHARTS = ['教室使用率排行', '热门时段分布', '月度预约趋势', '实际使用人数统计']
 
 function chartCard(page, title) {
   return page.locator('.chart-card').filter({ has: page.locator('.chart-title', { hasText: title }) })
 }
 
 async function expectAllChartsRendered(page) {
-  await expect(page.locator('.chart-box canvas')).toHaveCount(3)
+  await expect(page.locator('.chart-box canvas')).toHaveCount(4)
   for (const title of CHARTS) {
     await expect(chartCard(page, title).locator('canvas'), `「${title}」应渲染出 canvas`).toBeVisible()
   }

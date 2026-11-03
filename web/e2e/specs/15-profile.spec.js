@@ -133,7 +133,7 @@ test.describe('个人中心', () => {
     await expect(page.locator('.identity-avatar')).toHaveText(info.name.slice(-2))
 
     // 数据概览：四项，值与接口一致
-    await expect(page.locator('.overview-item')).toHaveCount(4)
+    await expect(page.locator('.overview-item')).toHaveCount(5)
     const expectItems = [
       ['累计预约', String(stats.totalReservations ?? 0)],
       ['本月预约', String(stats.monthReservations ?? 0)],

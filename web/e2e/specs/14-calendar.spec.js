@@ -12,7 +12,7 @@ import { test, expect } from '@playwright/test'
 import { loginAs, apiLogin } from '../helpers/auth'
 import { expectOk, createReservation, auditReservation, getClassroom, tryCancel } from '../helpers/api'
 import { pageToken, isSlotFree } from '../helpers/stable-seed'
-import { e2ePurpose, futureDate, SLOTS } from '../helpers/data'
+import { e2ePurpose, futureDate, openDate, SLOTS } from '../helpers/data'
 
 const PATH = '/student/calendar'
 
@@ -59,6 +59,18 @@ async function pickOption(page, trigger, optionText) {
 /** 在候选 (date × slot) 中挑第一个无冲突时段（可排除已占用时段） */
 async function freeSlotFor(request, token, classroomId, dates, slots, exclude = []) {
   for (const date of dates) {
+    for (const [startTime, endTime] of slots) {
+      if (exclude.some((e) => e.date === date && e.startTime === startTime && e.endTime === endTime)) {
+        continue
+      }
+      if (await isSlotFree(request, token, { classroomId, date, startTime, endTime })) {
+        return { date, startTime, endTime }
+      }
+    }
+  }
+  // 兜底：顺延到后面若干工作日（避免「首选日期恰好周末 / 已被占满」导致整片红）
+  for (let i = 1; i <= 12; i += 1) {
+    const date = openDate(i)
     for (const [startTime, endTime] of slots) {
       if (exclude.some((e) => e.date === date && e.startTime === startTime && e.endTime === endTime)) {
         continue

@@ -42,7 +42,7 @@ import {
   getOverview,
   seedApprovedReservation
 } from '../helpers/api'
-import { CLASSROOMS, e2ePurpose, futureDate, today, timeFromNow } from '../helpers/data'
+import { CLASSROOMS, e2ePurpose, today, timeFromNow, openDate, isWeekday } from '../helpers/data'
 
 /* ==================== 工具 ==================== */
 
@@ -96,34 +96,40 @@ async function pickFreeRoom(request, token, candidates, date, startTime, endTime
   return null
 }
 
+/** 取一个该日期该时段空闲的教室（避开库中既有的已通过预约），失败即断言报错 */
+async function pickRoom(request, token, date, startTime, endTime) {
+  const room = await pickFreeRoom(request, token, Object.values(CLASSROOMS), date, startTime, endTime)
+  expect(room, `未找到 ${date} ${startTime}-${endTime} 的空闲教室`).toBeTruthy()
+  return room
+}
+
 /* ==================== 1. 冲突检测公式 ==================== */
 
 test.describe('预约冲突检测（核心公式）', () => {
   test('六组边界：仅与「已通过」预约按重叠公式判定', async ({ request }) => {
     const adminToken = await login(request, 'admin')
     const studentToken = await login(request, 'student')
-    const roomKey = 'C201'
-    const room = CLASSROOMS[roomKey]
-    const date = futureDate(10)
+    const date = openDate(10)
+    const room = await pickRoom(request, studentToken, date, '09:00', '11:00')
 
-    // 基准：已通过预约 10:00-12:00（按真实链路造：提交 → 管理员审核通过）
+    // 基准：已通过预约 09:00-11:00（按真实链路造：提交 → 管理员审核通过）
     await seedApprovedReservation(request, {
       adminToken,
       studentToken,
       classroomId: room.id,
       date,
-      startTime: '10:00',
-      endTime: '12:00',
-      purpose: e2ePurpose(`冲突基准-${roomKey}-10:00-12:00`)
+      startTime: '09:00',
+      endTime: '11:00',
+      purpose: e2ePurpose('冲突基准-09:00-11:00')
     })
 
     const cases = [
-      { start: '09:00', end: '11:00', conflict: true, label: '左侧部分重叠' },
-      { start: '11:00', end: '13:00', conflict: true, label: '右侧部分重叠' },
-      { start: '09:00', end: '13:00', conflict: true, label: '被既有完全包含' },
-      { start: '10:00', end: '12:00', conflict: true, label: '完全重叠' },
-      { start: '08:00', end: '10:00', conflict: false, label: '左相邻（旧结束==新开始）' },
-      { start: '12:00', end: '14:00', conflict: false, label: '右相邻（新开始==旧结束）' }
+      { start: '08:00', end: '10:00', conflict: true, label: '左侧部分重叠' },
+      { start: '10:00', end: '12:00', conflict: true, label: '右侧部分重叠' },
+      { start: '08:00', end: '12:00', conflict: true, label: '完全包含既有' },
+      { start: '09:00', end: '11:00', conflict: true, label: '完全重叠' },
+      { start: '08:00', end: '09:00', conflict: false, label: '左相邻（旧结束==新开始）' },
+      { start: '11:00', end: '12:00', conflict: false, label: '右相邻（新开始==旧结束）' }
     ]
 
     for (const c of cases) {
@@ -140,7 +146,7 @@ test.describe('预约冲突检测（核心公式）', () => {
         expect(data.conflict).toBe(c.conflict)
         if (c.conflict) {
           expect(data.reason).toContain('冲突')
-          expect(data.reason).toContain('10:00-12:00')
+          expect(data.reason).toContain('09:00-11:00')
         } else {
           expect(data.reason).toBe('该时段可预约')
         }
@@ -151,7 +157,7 @@ test.describe('预约冲突检测（核心公式）', () => {
   test('待审核 / 已取消的预约不构成冲突（仅已通过参与判定）', async ({ request }) => {
     const studentToken = await login(request, 'student')
     const room = CLASSROOMS.C301
-    const date = futureDate(11)
+    const date = openDate(11)
     const slot = { classroomId: room.id, date, startTime: '10:00', endTime: '12:00' }
 
     // 造一条待审核（不审核）
@@ -184,9 +190,8 @@ test.describe('预约冲突检测（核心公式）', () => {
   test('后端二次校验：绕过前端直调提交接口，重叠时段仍被拒绝', async ({ request }) => {
     const adminToken = await login(request, 'admin')
     const studentToken = await login(request, 'student')
-    const roomKey = 'C401'
-    const room = CLASSROOMS[roomKey]
-    const date = futureDate(12)
+    const date = openDate(12)
+    const room = await pickRoom(request, studentToken, date, '10:00', '12:00')
 
     await seedApprovedReservation(request, {
       adminToken,
@@ -195,7 +200,7 @@ test.describe('预约冲突检测（核心公式）', () => {
       date,
       startTime: '10:00',
       endTime: '12:00',
-      purpose: e2ePurpose(`二次校验基准-${roomKey}`)
+      purpose: e2ePurpose('二次校验基准')
     })
 
     // 重叠 → 业务失败 400（前端校验被绕过仍被后端拦下）
@@ -203,7 +208,7 @@ test.describe('预约冲突检测（核心公式）', () => {
       classroomId: room.id,
       reserveDate: date,
       startTime: '11:00',
-      endTime: '13:00',
+      endTime: '12:00',
       purpose: e2ePurpose('二次校验-重叠时段应被拒')
     })
     const fail = expectBizFail(conflictRes, 400, '直调提交重叠时段')
@@ -214,8 +219,8 @@ test.describe('预约冲突检测（核心公式）', () => {
       await createReservation(request, studentToken, {
         classroomId: room.id,
         reserveDate: date,
-        startTime: '12:00',
-        endTime: '14:00',
+        startTime: '08:00',
+        endTime: '10:00',
         purpose: e2ePurpose('二次校验-相邻时段应放行')
       }),
       '直调提交相邻时段'
@@ -231,8 +236,8 @@ test.describe('前端实时校验（教室详情页）', () => {
   test('重叠时段提示冲突且按钮禁用，改为不冲突时段后按钮可用', async ({ page, request }) => {
     const adminToken = await login(request, 'admin')
     const studentData = await apiLogin(page.request, 'student')
-    const room = CLASSROOMS.C301
-    const date = futureDate(14)
+    const date = openDate(14)
+    const room = await pickRoom(request, studentData.token, date, '10:00', '12:00')
 
     // 前置：该教室该日期已有一条已通过 10:00-12:00
     await seedApprovedReservation(request, {
@@ -272,7 +277,7 @@ test.describe('前端实时校验（教室详情页）', () => {
     await expect(page.locator('.el-dialog')).toBeHidden()
     await page.evaluate(
       ([k, v]) => localStorage.setItem(k, v),
-      [draftKey, JSON.stringify({ reserveDate: date, startTime: '12:00', endTime: '14:00', purpose: e2ePurpose('前端实时校验') })]
+      [draftKey, JSON.stringify({ reserveDate: date, startTime: '08:00', endTime: '10:00', purpose: e2ePurpose('前端实时校验') })]
     )
     await page.locator('.action-bar').getByRole('button', { name: '预约申请' }).click()
 
@@ -284,7 +289,7 @@ test.describe('前端实时校验（教室详情页）', () => {
   test('开始时间不早于结束时间：前端提示且不发冲突检测请求', async ({ page }) => {
     const studentData = await apiLogin(page.request, 'student')
     const room = CLASSROOMS.C201
-    const date = futureDate(10)
+    const date = openDate(10)
     const draftKey = `reservation_draft_${studentData.user.id}_${room.id}`
 
     await loginAs(page, { who: 'student' })
@@ -308,8 +313,8 @@ test.describe('预约状态流转（待审核0 / 已通过1 / 已驳回2 / 已�
   test('待审核 → 已通过：审核后落库为已通过，且不可重复审核', async ({ request }) => {
     const adminToken = await login(request, 'admin')
     const studentToken = await login(request, 'student')
-    const room = CLASSROOMS.C401
-    const date = futureDate(13)
+    const date = openDate(13)
+    const room = await pickRoom(request, studentToken, date, '10:00', '12:00')
 
     const id = expectOk(
       await createReservation(request, studentToken, {
@@ -338,15 +343,15 @@ test.describe('预约状态流转（待审核0 / 已通过1 / 已驳回2 / 已�
   test('待审核 → 已驳回：驳回必填备注，驳回后不可再审', async ({ request }) => {
     const adminToken = await login(request, 'admin')
     const studentToken = await login(request, 'student')
-    const room = CLASSROOMS.C401
-    const date = futureDate(13)
+    const date = openDate(13)
+    const room = await pickRoom(request, studentToken, date, '14:00', '16:00')
 
     const id = expectOk(
       await createReservation(request, studentToken, {
         classroomId: room.id,
         reserveDate: date,
-        startTime: '13:00',
-        endTime: '15:00',
+        startTime: '14:00',
+        endTime: '16:00',
         purpose: e2ePurpose('流转-0→2')
       }),
       '待审核预约提交（驳回用）'
@@ -373,7 +378,7 @@ test.describe('预约状态流转（待审核0 / 已通过1 / 已驳回2 / 已�
     const adminToken = await login(request, 'admin')
     const studentToken = await login(request, 'student')
     const room = CLASSROOMS.C201
-    const date = futureDate(14)
+    const date = openDate(14)
 
     // 待审核 → 已取消
     const pendingId = expectOk(
@@ -411,10 +416,12 @@ test.describe('预约状态流转（待审核0 / 已通过1 / 已驳回2 / 已�
     const studentToken = await login(request, 'student')
     const student2Token = await login(request, 'student2')
 
+    const crossDate = openDate(13)
+    const crossRoom = await pickRoom(request, student2Token, crossDate, '10:00', '12:00')
     const id = expectOk(
       await createReservation(request, student2Token, {
-        classroomId: CLASSROOMS.C301.id,
-        reserveDate: futureDate(13),
+        classroomId: crossRoom.id,
+        reserveDate: crossDate,
         startTime: '10:00',
         endTime: '12:00',
         purpose: e2ePurpose('跨用户取消-他人预约')
@@ -436,8 +443,8 @@ test.describe('审核冲突复查与批量审核', () => {
   test('审核通过前复查冲突：同教室同时段先后通过，第二条被拒（防「双已通过」）', async ({ request }) => {
     const adminToken = await login(request, 'admin')
     const studentToken = await login(request, 'student')
-    const room = CLASSROOMS.C201
-    const date = futureDate(15)
+    const date = openDate(15)
+    const room = await pickRoom(request, studentToken, date, '10:00', '12:00')
 
     // 两条重叠的待审核（此时都还不是已通过，提交阶段都不冲突）
     const idA = expectOk(
@@ -455,7 +462,7 @@ test.describe('审核冲突复查与批量审核', () => {
         classroomId: room.id,
         reserveDate: date,
         startTime: '11:00',
-        endTime: '13:00',
+        endTime: '12:00',
         purpose: e2ePurpose('双已通过-B')
       }),
       '提交 B'
@@ -474,21 +481,23 @@ test.describe('审核冲突复查与批量审核', () => {
   test('批量审核：仅待审核参与，已通过记录不被改动，返回实际更新条数', async ({ request }) => {
     const adminToken = await login(request, 'admin')
     const studentToken = await login(request, 'student')
-    const d15 = futureDate(15)
-    const d16 = futureDate(16)
+    const d15 = openDate(15)
+    const d16 = openDate(16)
 
+    const roomApproved = await pickRoom(request, studentToken, d15, '10:00', '12:00')
     const approvedId = await seedApprovedReservation(request, {
       adminToken,
       studentToken,
-      classroomId: CLASSROOMS.C301.id,
+      classroomId: roomApproved.id,
       date: d15,
       startTime: '10:00',
       endTime: '12:00',
       purpose: e2ePurpose('批量审核-已通过不参与')
     })
+    const roomP1 = await pickRoom(request, studentToken, d15, '10:00', '12:00')
     const pending1 = expectOk(
       await createReservation(request, studentToken, {
-        classroomId: CLASSROOMS.C401.id,
+        classroomId: roomP1.id,
         reserveDate: d15,
         startTime: '10:00',
         endTime: '12:00',
@@ -496,9 +505,10 @@ test.describe('审核冲突复查与批量审核', () => {
       }),
       '提交待审核 1'
     )
+    const roomP2 = await pickRoom(request, studentToken, d16, '10:00', '12:00')
     const pending2 = expectOk(
       await createReservation(request, studentToken, {
-        classroomId: CLASSROOMS.C201.id,
+        classroomId: roomP2.id,
         reserveDate: d16,
         startTime: '10:00',
         endTime: '12:00',
@@ -526,7 +536,7 @@ test.describe('审核冲突复查与批量审核', () => {
     const id = expectOk(
       await createReservation(request, studentToken, {
         classroomId: CLASSROOMS.C401.id,
-        reserveDate: futureDate(16),
+        reserveDate: openDate(16),
         startTime: '10:00',
         endTime: '12:00',
         purpose: e2ePurpose('批量驳回-未填备注')
@@ -547,8 +557,8 @@ test.describe('审核冲突复查与批量审核', () => {
   test('批量审核批内互斥：同批两条重叠待审核整批拒绝（H1 的 E2E 覆盖）', async ({ request }) => {
     const adminToken = await login(request, 'admin')
     const studentToken = await login(request, 'student')
-    const room = CLASSROOMS.C301
-    const date = futureDate(16)
+    const date = openDate(16)
+    const room = await pickRoom(request, studentToken, date, '10:00', '12:00')
 
     // 两条互相重叠的待审核（提交阶段只与「已通过」比对，故均可提交成功）
     const idA = expectOk(
@@ -566,7 +576,7 @@ test.describe('审核冲突复查与批量审核', () => {
         classroomId: room.id,
         reserveDate: date,
         startTime: '11:00',
-        endTime: '13:00',
+        endTime: '12:00',
         purpose: e2ePurpose('批内互斥-B')
       }),
       '提交批内互斥 B'
@@ -590,8 +600,8 @@ test.describe('取消时限（开始前 1 小时内禁止取消）', () => {
     const studentToken = await login(request, 'student')
     const date = today()
     const hour = dayjs().hour()
-    // 安全窗口：08:00-18:59 —— 保证 +30/+180 分钟都不跨天、不越出 08:00-22:00 可预约窗口
-    test.skip(hour < 8 || hour > 18, '当前时刻超出安全窗口（08:00-18:59），跳过以免跨天/越窗造成误判')
+    // 安全窗口：08:00-18:59 —— 保证 +30/+180 分钟都不跨天、不越出 08:00-22:00 可预约窗口；周末无开放时段同样跳过
+    test.skip(hour < 8 || hour > 18 || !isWeekday(dayjs()), '当前时刻超出安全窗口（08:00-18:59）或今日非工作日无开放时段，跳过')
 
     const candidates = [CLASSROOMS.C201, CLASSROOMS.C301, CLASSROOMS.C401]
 
@@ -664,14 +674,14 @@ test.describe('参数校验（分页 / 日历）', () => {
     expect(missing.message).toContain('startDate')
 
     const reversed = expectBizFail(
-      await listCalendar(request, studentToken, { startDate: futureDate(5), endDate: today() }),
+      await listCalendar(request, studentToken, { startDate: openDate(5), endDate: today() }),
       400,
       '日历区间倒置'
     )
     expect(reversed.message).toContain('开始日期不能晚于结束日期')
 
     const tooLong = expectBizFail(
-      await listCalendar(request, studentToken, { startDate: today(), endDate: futureDate(500) }),
+      await listCalendar(request, studentToken, { startDate: today(), endDate: openDate(500) }),
       400,
       '日历跨度过大'
     )

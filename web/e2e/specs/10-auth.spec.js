@@ -21,7 +21,7 @@ import { test, expect } from '@playwright/test'
 import dayjs from 'dayjs'
 import { ACCOUNTS, apiLogin, loginAs, clearAuth } from '../helpers/auth'
 import { expectOk, listMine, seedApprovedReservation, tryCancel } from '../helpers/api'
-import { CLASSROOMS, e2ePurpose, today } from '../helpers/data'
+import { CLASSROOMS, e2ePurpose, today, isWeekday } from '../helpers/data'
 
 /** 登录按钮文案带字间距（源代码为「登 录」），用正则放宽空白 */
 const LOGIN_BTN = /登\s*录/
@@ -197,8 +197,8 @@ test('登录后：当日存在即将开始（24h 内）的已通过预约 → �
   const end = start.add(60, 'minute')
   // 可造预约窗口：08:00-22:00（后端强校验），且留出 1 小时以上便于清理时取消
   test.skip(
-    end.hour() * 60 + end.minute() > 22 * 60 || start.hour() * 60 + start.minute() < 8 * 60,
-    `当前时刻（${now.format('HH:mm')}）无法造出「今日且即将开始」的合法预约，本场景无法覆盖`
+    end.hour() * 60 + end.minute() > 22 * 60 || start.hour() * 60 + start.minute() < 8 * 60 || !isWeekday(now),
+    `当前时刻（${now.format('HH:mm')}）无法造出「今日且即将开始」的合法预约，或今日非工作日无开放时段，本场景无法覆盖`
   )
 
   // 前置：造一条今日、即将开始（90 分钟后）的已通过预约（按任务约定使用 C101(9) + 今日）

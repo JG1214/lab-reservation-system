@@ -20,7 +20,7 @@
 import { test, expect } from '@playwright/test'
 import { apiLogin, loginAs } from '../helpers/auth'
 import { createReservation, expectOk, listManage, listMine, tryCancel } from '../helpers/api'
-import { CLASSROOMS, e2ePurpose, futureDate, SLOTS } from '../helpers/data'
+import { CLASSROOMS, e2ePurpose, openDate, SLOTS } from '../helpers/data'
 import { AI_PATHS, mockAi } from '../helpers/ai'
 
 /**
@@ -50,7 +50,7 @@ function watchAiUrls(page, path) {
 
 /** 自定义推荐结果：第一位 C101(9) 是本用例唯一会点击/派生的教室，其余两条仅用于展示校验 */
 function recommendPayload() {
-  const date = futureDate(1)
+  const date = openDate(1)
   return {
     enabled: true,
     message: null,
@@ -144,7 +144,7 @@ test('教室列表：AI 为你推荐卡渲染 Top3，可直达详情且提供重
 /* 2. AI 快速预约弹窗                                                   */
 /* ------------------------------------------------------------------ */
 test('AI 快速预约：解析结果回填表单 → 选教室 → 取消不写库', async ({ page }) => {
-  const parseDate = futureDate(15)
+  const parseDate = openDate(15)
   const parsedPurpose = e2ePurpose(`AI快速预约-取消未提交-${Date.now()}`)
   const parsePayload = {
     enabled: true,
@@ -230,7 +230,7 @@ test('AI 快速预约：解析结果回填表单 → 选教室 → 取消不写�
 /* 2.1 R13-5 结构化流式：缓存命中无 phase 帧（meta→result→done）         */
 /* ------------------------------------------------------------------ */
 test('AI 快速预约：缓存命中（无 phase 帧）时解析结果仍正常回填', async ({ page }) => {
-  const parseDate = futureDate(20)
+  const parseDate = openDate(20)
   // _streamPhase:false 模拟后端缓存命中：直接 meta→result→done
   const parsePayload = {
     enabled: true,
@@ -318,7 +318,7 @@ test('管理端 AI 合规校验：显示校验结果，但审核状态仍为待�
   const id = expectOk(
     await createReservation(page.request, student.token, {
       classroomId: CLASSROOMS.C101.id,
-      reserveDate: futureDate(16),
+      reserveDate: openDate(16),
       startTime: SLOTS.afternoon[0],
       endTime: SLOTS.afternoon[1],
       purpose
@@ -385,7 +385,7 @@ test('管理端 AI 合规校验：首屏自动校验全部失败时「AI 校验�
   const id = expectOk(
     await createReservation(page.request, student.token, {
       classroomId: CLASSROOMS.C101.id,
-      reserveDate: futureDate(18),
+      reserveDate: openDate(18),
       startTime: SLOTS.afternoon[0],
       endTime: SLOTS.afternoon[1],
       purpose
@@ -440,7 +440,7 @@ test('管理端 AI 合规校验：SSE 建链前返回 Result JSON 时识别为�
   const id = expectOk(
     await createReservation(page.request, student.token, {
       classroomId: CLASSROOMS.C101.id,
-      reserveDate: futureDate(21),
+      reserveDate: openDate(21),
       startTime: SLOTS.afternoon[0],
       endTime: SLOTS.afternoon[1],
       purpose
@@ -536,7 +536,7 @@ test('AI 降级提示 · 快速预约：顶部标注改为降级原因', async (
     [AI_PATHS.parse]: {
       enabled: true,
       message: DEGRADE_MSG,
-      date: futureDate(15),
+      date: openDate(15),
       startTime: SLOTS.afternoon[0],
       endTime: SLOTS.afternoon[1],
       capacity: 40,
@@ -588,7 +588,7 @@ test('AI 降级提示 · 管理端合规校验：标签显示「规则校验：�
   const id = expectOk(
     await createReservation(page.request, student.token, {
       classroomId: CLASSROOMS.C101.id,
-      reserveDate: futureDate(19),
+      reserveDate: openDate(19),
       startTime: SLOTS.afternoon[0],
       endTime: SLOTS.afternoon[1],
       purpose

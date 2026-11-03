@@ -19,7 +19,7 @@ import {
   getClassroom
 } from '../helpers/api'
 import { pageToken, isSlotFree } from '../helpers/stable-seed'
-import { e2ePurpose, futureDate } from '../helpers/data'
+import { e2ePurpose, futureDate, openDate } from '../helpers/data'
 
 const PATH = '/student/my-reservations'
 
@@ -37,8 +37,19 @@ async function openMine(page) {
 
 /** 在候选 (date × slot) 中挑第一个无冲突时段 */
 async function freeSlotFor(request, token, classroomId, dates, slots) {
+  const trySlots = slots && slots.length ? slots : [SLOTS.morning, SLOTS.noon, SLOTS.afternoon, SLOTS.evening]
+  // 首选：调用方给的日期 × 时段
   for (const date of dates) {
-    for (const [startTime, endTime] of slots) {
+    for (const [startTime, endTime] of trySlots) {
+      if (await isSlotFree(request, token, { classroomId, date, startTime, endTime })) {
+        return { date, startTime, endTime }
+      }
+    }
+  }
+  // 兜底：顺延到后面若干工作日（避免「今天恰好周末」或首选日期全被占满导致整片红）
+  for (let i = 1; i <= 12; i += 1) {
+    const date = openDate(i)
+    for (const [startTime, endTime] of trySlots) {
       if (await isSlotFree(request, token, { classroomId, date, startTime, endTime })) {
         return { date, startTime, endTime }
       }
@@ -245,6 +256,8 @@ test.describe('我的预约', () => {
     // 第二次：点「确定取消」→ 状态变已取消
     await rowBy(page, purpose).getByRole('button', { name: '取消' }).click()
     await expect(page.locator('.el-message-box')).toContainText('取消后不可恢复')
+    // 取消必须填写原因（inputValidator 非空校验），否则确定按钮被拦下、请求不会发出
+    await page.locator('.el-message-box textarea').fill('E2E自动化-课程临时调整')
     await page.locator('.el-message-box').getByRole('button', { name: '确定取消' }).click()
     await expect(page.getByText('取消成功')).toBeVisible()
     await expect(rowBy(page, purpose).locator('.el-tag')).toHaveText('已取消')

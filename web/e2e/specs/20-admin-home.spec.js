@@ -2,18 +2,22 @@
  * 管理端 20 —— 后台首页（/admin/home，AdminWelcome.vue）
  *
  * 覆盖：
- *  1. 4 张数据卡片（今日预约/待审核/教室总数/用户总数）渲染，值为非负整数
+ *  1. 6 张数据卡片（今日预约/待审核/待登记使用/今日实到人数/教室总数/用户总数）渲染，值为非负整数
  *  2. 卡片数值与 GET /api/stats/overview 逐字段一致（不做绝对值断言，只做一致性断言）
- *  3. 5 个快捷入口卡片点击后跳转到正确路由
+ *  3. 7 个快捷入口卡片点击后跳转到正确路由
+ *
+ * 卡片数量不写死：以 FIELDS / QUICK_ENTRIES 清单长度为准，页面增删卡片时只改清单，断言自动跟随。
  */
 import { test, expect } from '@playwright/test'
 import { loginAs } from '../helpers/auth'
 import { getOverview, expectOk } from '../helpers/api'
 
-/** [页面文案, 接口字段] */
+/** [页面文案, 接口字段] —— 与 AdminWelcome.vue 的 .stat-item 一一对应，顺序同页面 */
 const FIELDS = [
   ['今日预约', 'todayReservationCount'],
   ['待审核', 'pendingAuditCount'],
+  ['待登记使用', 'pendingUsageCount'],
+  ['今日实到人数', 'todayActualPeople'],
   ['教室总数', 'classroomCount'],
   ['用户总数', 'userCount']
 ]
@@ -23,6 +27,8 @@ const QUICK_ENTRIES = [
   ['教室资源管理', '/admin/classrooms'],
   ['预约审核', '/admin/audits'],
   ['预约记录', '/admin/records'],
+  ['使用记录', '/admin/usage'],
+  ['开放时段', '/admin/slots'],
   ['数据看板', '/admin/dashboard']
 ]
 
@@ -42,14 +48,14 @@ async function readCardValues(page) {
 
 /** 概览接口返回后 Vue 才会重渲染，教室里一定有数据（≥12），用它作为渲染完成信号 */
 async function waitCardsRendered(page) {
-  await expect(page.locator('.stat-item')).toHaveCount(4)
+  await expect(page.locator('.stat-item')).toHaveCount(FIELDS.length)
   await expect
     .poll(async () => Number((await statItem(page, '教室总数').locator('.stat-value').innerText()).trim()))
     .toBeGreaterThan(0)
 }
 
 test.describe('管理端-后台首页（AdminWelcome）', () => {
-  test('4 张数据卡片渲染，数值为非负整数', async ({ page }) => {
+  test('6 张数据卡片渲染，数值为非负整数', async ({ page }) => {
     await loginAs(page, { who: 'admin', path: '/admin/home' })
     await expect(page).toHaveURL(/\/admin\/home$/)
     await expect(page.locator('.page-title, .banner-title').first()).toBeVisible()
@@ -88,9 +94,9 @@ test.describe('管理端-后台首页（AdminWelcome）', () => {
     expect(matched, `卡片值 ${JSON.stringify(values)} 与接口 ${JSON.stringify(api)} 不一致`).toBe(true)
   })
 
-  test('5 个快捷入口卡片点击后跳转到正确路由', async ({ page }) => {
+  test('7 个快捷入口卡片点击后跳转到正确路由', async ({ page }) => {
     await loginAs(page, { who: 'admin', path: '/admin/home' })
-    await expect(page.locator('.quick-card')).toHaveCount(5)
+    await expect(page.locator('.quick-card')).toHaveCount(QUICK_ENTRIES.length)
 
     for (const [name, path] of QUICK_ENTRIES) {
       await page.goto('/admin/home')

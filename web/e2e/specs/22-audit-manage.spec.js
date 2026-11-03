@@ -25,13 +25,19 @@ let studentToken = null
  */
 let usedSlots = []
 
+/** 造数可能因首选日期被占而顺延到兜底日期，筛选范围一律以实际造数日期为准 */
+function spanOf(...seeds) {
+  const ds = seeds.map((s) => s.date).sort()
+  return [ds[0], ds[ds.length - 1]]
+}
+
 /** 打开筛选：每页 50 条 + 日期范围（必要时加状态），保证自造记录稳定落在当前页 */
-async function openFiltered(page, { status } = {}) {
+async function openFiltered(page, { status, dates = DATES } = {}) {
   await setPageSize(page, '50条/页')
   if (status !== undefined) {
     await pickOption(page, searchItem(page, '状态'), status)
   }
-  await fillDateRange(page, DATES[0], DATES[2])
+  await fillDateRange(page, dates[0], dates[dates.length - 1])
   await page.getByRole('button', { name: '查询' }).click()
 }
 
@@ -81,7 +87,7 @@ test.describe('管理端-预约审核（AuditManage）', () => {
 
   test('全量申请查询与筛选：状态 + 日期范围 + 关键词', async ({ page }) => {
     const seeded = await seedPending(page, '审核筛选')
-    await openFiltered(page, { status: '待审核' })
+    await openFiltered(page, { status: '待审核', dates: spanOf(seeded) })
 
     const row = rowOf(page, seeded.purpose)
     await expect(row, '自造待审核记录应出现在筛选结果中').toBeVisible()
@@ -105,7 +111,7 @@ test.describe('管理端-预约审核（AuditManage）', () => {
 
   test('一键通过：状态变为已通过', async ({ page }) => {
     const seeded = await seedPending(page, '一键通过')
-    await openFiltered(page, { status: '待审核' })
+    await openFiltered(page, { status: '待审核', dates: spanOf(seeded) })
 
     const row = rowOf(page, seeded.purpose)
     await expect(row).toBeVisible()
@@ -129,15 +135,15 @@ test.describe('管理端-预约审核（AuditManage）', () => {
     // 接口交叉复核：该记录确为已通过（不是仅前端渲染）
     const record = await findManageByPurpose(page.request, adminToken, seeded.purpose, {
       status: 1,
-      startDate: DATES[0],
-      endDate: DATES[2]
+      startDate: seeded.date,
+      endDate: seeded.date
     })
     expect(record && record.status, `记录 ${seeded.purpose} 状态应为 1`).toBe(1)
   })
 
   test('驳回：备注必填校验 + 快捷原因回填', async ({ page }) => {
     const seeded = await seedPending(page, '驳回必填')
-    await openFiltered(page, { status: '待审核' })
+    await openFiltered(page, { status: '待审核', dates: spanOf(seeded) })
 
     const row = rowOf(page, seeded.purpose)
     await expect(row).toBeVisible()
@@ -172,7 +178,7 @@ test.describe('管理端-预约审核（AuditManage）', () => {
   test('批量通过：仅待审核记录生效', async ({ page }) => {
     const a = await seedPending(page, '批量通过')
     const b = await seedPending(page, '批量通过')
-    await openFiltered(page, { status: '待审核' })
+    await openFiltered(page, { status: '待审核', dates: spanOf(a, b) })
 
     await selectRow(page, a.purpose)
     await selectRow(page, b.purpose)
@@ -199,7 +205,7 @@ test.describe('管理端-预约审核（AuditManage）', () => {
     const pending = await seedPending(page, '批量驳回-待审核')
     const approved = await seedApproved(page, '批量驳回-已通过')
     // 不筛状态，让「待审核 + 已通过」混合出现
-    await openFiltered(page)
+    await openFiltered(page, { dates: spanOf(pending, approved) })
 
     await selectRow(page, pending.purpose)
     await selectRow(page, approved.purpose)
@@ -221,8 +227,8 @@ test.describe('管理端-预约审核（AuditManage）', () => {
     // 接口交叉复核：已通过记录状态与审核备注均未被改动
     const record = await findManageByPurpose(page.request, adminToken, approved.purpose, {
       status: 1,
-      startDate: DATES[0],
-      endDate: DATES[2]
+      startDate: approved.date,
+      endDate: approved.date
     })
     expect(record && record.status, '已通过记录不应被批量驳回改动').toBe(1)
     expect(record.auditRemark ?? null, '已通过记录不应被写入驳回备注').toBeNull()

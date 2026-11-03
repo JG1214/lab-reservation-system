@@ -157,7 +157,7 @@ test.describe('教室列表页 - 筛选与展示', () => {
     await expect(card.getByText(`容量 ${expected.capacity} 人`)).toBeVisible()
     await expect(card.getByRole('button', { name: '查看详情并预约' })).toBeVisible()
     await expect(card.locator('.remain-slots')).toContainText('今日剩余')
-    await expect(card.locator('.remain-slots')).toContainText('时段可约')
+    await expect(card.locator('.remain-slots')).toContainText('人可约')
     // 类型标签文案（1-普通教室）
     expect(expected.type).toBe(1)
     await expect(card.locator('.room-meta .el-tag')).toHaveText('普通教室')
@@ -211,8 +211,8 @@ test.describe('教室列表页 - 筛选与展示', () => {
       // 状态标签三态之一且与接口一致
       expect(['当前空闲', '使用中', '已结束']).toContain(status)
       expect(status, `「${room.name}」状态标签应与接口一致`).toBe(apiRoom.statusLabel)
-      // 今日剩余时段与接口一致
-      await expect(card.locator('.remain-slots')).toContainText(String(room.todayRemainingSlots))
+      // 今日剩余可约人数与接口一致
+      await expect(card.locator('.remain-slots')).toContainText(String(room.todayRemainingPeople))
     }
   })
 

@@ -18,7 +18,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const WEB_PORT = Number(process.env.E2E_WEB_PORT || 5173)
-const FRONTEND = `http://127.0.0.1:${WEB_PORT}`
+const FRONTEND = process.env.E2E_BASE_URL || `http://127.0.0.1:${WEB_PORT}`
 const API_PORT = process.env.E2E_API_PORT || '8080'
 const API_TARGET = process.env.E2E_API_TARGET || `http://localhost:${API_PORT}`
 
@@ -60,11 +60,15 @@ export default defineConfig({
     }
   ],
 
-  webServer: {
-    command: `npm run dev -- --port ${WEB_PORT}`,
-    url: FRONTEND,
-    reuseExistingServer: true,
-    timeout: 120_000,
-    env: { VITE_API_TARGET: API_TARGET }
-  }
+  // 已显式给定 E2E_BASE_URL 时跳过后端自起的 webServer：
+  // 用于前端预览服务器（vite build + vite preview）或已手工起好的前端，避免重复拉起 5173
+  webServer: process.env.E2E_BASE_URL
+    ? undefined
+    : {
+        command: `npm run dev -- --port ${WEB_PORT}`,
+        url: FRONTEND,
+        reuseExistingServer: true,
+        timeout: 120_000,
+        env: { VITE_API_TARGET: API_TARGET }
+      }
 })

@@ -7,6 +7,7 @@
 import { expect } from '@playwright/test'
 import { API_BASE } from './auth'
 import { expectOk, checkConflict, createReservation, auditReservation, listManage } from './api'
+import { SLOT_FALLBACKS, openDate, openSlots } from './data'
 
 /** 与 helpers/api.js 的 call 同构（此处独立实现，避免修改既有文件） */
 async function call(request, token, method, path, { data, params } = {}) {
@@ -103,14 +104,11 @@ export async function exportReservationsApi(request, token, params) {
 
 /* ================= 预约前置数据（冲突检测探路 + 真实链路审核） ================= */
 
-/** 候选时段（避开 18:00 之后，贴合常规开放时段） */
-export const FREE_SLOTS = [
-  ['08:00', '10:00'],
-  ['10:00', '12:00'],
-  ['12:00', '14:00'],
-  ['14:00', '16:00'],
-  ['16:00', '18:00']
-]
+/**
+ * 候选时段：只用落在开放窗口内的（避开 12:00-14:00 午间闭馆，否则后端 400）。
+ * 早期用 12:00-14:00 造数，落到闭馆时段就整片红，与业务无关。
+ */
+export const FREE_SLOTS = openSlots(SLOT_FALLBACKS)
 
 /** 两个时段是否（同一教室同一日期下）重叠 */
 export function slotOverlaps(a, b) {
@@ -118,30 +116,39 @@ export function slotOverlaps(a, b) {
 }
 
 /**
- * 依次探测教室 × 日期 × 时段，返回第一个无冲突的时段。
+ * 依次探测教室 × 候选(日期 × 时段)，返回第一个可预约的时段。
+ *
  * 为什么需要：预约记录没有删除接口，固定时段在第二次运行时必然冲突，探测空闲时段才能保证用例可重复。
  *
- * avoid：本用例内已占用/已计划的时段列表。冲突检测只认「已通过」记录（api.js 注释亦如此说明），
- *   因此同一次运行内连续创建的待审核记录不会被冲突检测拦住，可能落到同一时段；
- *   而批量审核会校验「同批记录时段重叠」并整批拒绝，故必须自行避让。
+ * 时间漂移兜底：传入的 dates 若落在周末 / 闭馆日，不再让 expectOk 直接抛 400（「未开放」不是真冲突），
+ * 而是跳过并把「从明天起顺延的工作日」追加为兜底候选（排在首选之后）。正常运行首选必命中，行为与改动前一致；
+ * 只有首选全不可预约（周末 / 已被占满）才用到兜底，避免用例因「今天恰好是周日」整片红。
+ *
+ * avoid：本用例内已占用/已计划的时段列表。冲突检测只认「已通过」记录，故同批待审核不会互相触发冲突、需自行避让。
  */
 export async function findFreeSlot(request, token, { classroomIds, dates, avoid = [] }) {
+  const preferred = []
+  for (const date of dates) for (const [startTime, endTime] of FREE_SLOTS) preferred.push({ date, startTime, endTime })
+  const fallbackDates = []
+  for (let i = 1; fallbackDates.length < 12; i += 1) {
+    const date = openDate(i)
+    if (fallbackDates[fallbackDates.length - 1] !== date) fallbackDates.push(date)
+  }
+  const fallback = []
+  for (const date of fallbackDates) for (const [startTime, endTime] of FREE_SLOTS) fallback.push({ date, startTime, endTime })
+  const candidates = preferred.concat(fallback)
+
   for (const classroomId of classroomIds) {
-    for (const date of dates) {
-      for (const [startTime, endTime] of FREE_SLOTS) {
-        const candidate = { classroomId, date, startTime, endTime }
-        if (avoid.some((s) => slotOverlaps(candidate, s))) continue
-        const data = expectOk(
-          await checkConflict(request, token, { classroomId, date, startTime, endTime }),
-          `冲突检测 教室${classroomId} ${date} ${startTime}-${endTime}`
-        )
-        if (data && data.conflict === false) {
-          return candidate
-        }
-      }
+    for (const candidate of candidates) {
+      const date = candidate.date, startTime = candidate.startTime, endTime = candidate.endTime
+      const full = { classroomId, date, startTime, endTime }
+      if (avoid.some((s) => slotOverlaps(full, s))) continue
+      const res = await checkConflict(request, token, { classroomId, date, startTime, endTime })
+      if (!(res.body && res.body.code === 200 && res.body.data && res.body.data.conflict === false)) continue
+      return full
     }
   }
-  throw new Error(`未找到空闲时段：教室[${classroomIds}] 日期[${dates}]`)
+  throw new Error('未找到空闲时段：教室[' + classroomIds + '] 日期[' + dates + ']')
 }
 
 /**

@@ -72,9 +72,12 @@ export function listManage(request, token, params) {
   return call(request, token, 'GET', '/api/reservation/manage', { params })
 }
 
-/** 取消预约（仅本人；开始前 1 小时内禁止） */
-export function cancelReservation(request, token, id) {
-  return call(request, token, 'PUT', `/api/reservation/${id}/cancel`)
+/**
+ * 取消预约（仅本人；开始前 1 小时内禁止）。
+ * 后端 CancelDTO.reason 必填，故这里默认带一个 E2E 用途的取消原因，避免 400「请求体格式错误」。
+ */
+export function cancelReservation(request, token, id, reason = 'E2E自动化-测试取消') {
+  return call(request, token, 'PUT', `/api/reservation/${id}/cancel`, { data: { reason } })
 }
 
 /** 审核：status 1=通过 2=驳回（驳回必填 auditRemark） */

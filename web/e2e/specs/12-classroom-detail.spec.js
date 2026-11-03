@@ -19,7 +19,7 @@ import {
   tryCancel
 } from '../helpers/api'
 import { pageToken, seedApprovedAny, isSlotFree } from '../helpers/stable-seed'
-import { e2ePurpose, futureDate, today, SLOTS } from '../helpers/data'
+import { e2ePurpose, futureDate, today, openDate, SLOTS } from '../helpers/data'
 
 const detailPath = (id) => `/student/classrooms/${id}`
 
@@ -88,6 +88,15 @@ async function setFavorites(request, token, desired) {
 async function firstFreeSlot(request, token, classroomId, dates) {
   const slots = [SLOTS.morning, SLOTS.noon, SLOTS.afternoon, SLOTS.evening]
   for (const date of dates) {
+    for (const [startTime, endTime] of slots) {
+      if (await isSlotFree(request, token, { classroomId, date, startTime, endTime })) {
+        return { date, startTime, endTime }
+      }
+    }
+  }
+  // 兜底：顺延到后面若干工作日（避免「首选日期恰好周末 / 已被占满」导致整片红）
+  for (let i = 1; i <= 12; i += 1) {
+    const date = openDate(i)
     for (const [startTime, endTime] of slots) {
       if (await isSlotFree(request, token, { classroomId, date, startTime, endTime })) {
         return { date, startTime, endTime }
@@ -279,6 +288,10 @@ test.describe('教室详情页', () => {
     await pickTime(page, dialog, '结束时间', slot.endTime)
     await dialog.getByPlaceholder('请填写具体教学 / 实验 / 自习等用途').fill(purpose)
     await dialog.getByRole('button', { name: '提交预约' }).click()
+    // 提交前有二次确认（预约确认弹窗），必须点「确认提交」才会真正发请求
+    const confirmBox = page.locator('.el-message-box')
+    await expect(confirmBox).toContainText('预约确认')
+    await confirmBox.getByRole('button', { name: '确认提交' }).click()
 
     await expect(page.getByText('预约提交成功，待管理员审核')).toBeVisible()
 

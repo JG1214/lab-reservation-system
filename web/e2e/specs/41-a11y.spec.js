@@ -5,11 +5,11 @@
  * src/directives/clickable.js 以 v-clickable 补齐 role="button"、tabindex="0" 与
  * Enter/空格键激活（空格需 preventDefault 防页面滚动），本文件为其回归断言。
  *
- * 覆盖全量 19 处（6 文件 / 9 类），逐类断言三件事：
+ * 覆盖全量 21 处（6 文件 / 9 类），逐类断言三件事：
  *   ① 按钮语义完整：role="button" + tabindex="0"
  *   ② Tab 可真实到达（不是仅有 tabindex 属性）
  *   ③ Enter / 空格激活后的行为与鼠标点击一致
- * 分布：AdminWelcome .quick-card×5、Profile .quick-item×4 / .settings-row.clickable×4 /
+ * 分布：AdminWelcome .quick-card×7、Profile .quick-item×4 / .settings-row.clickable×4 /
  *      .fav-item×1 / .msg-item×1、AuditManage .ai-tag-clickable×1 / .reason-tag×1、
  *      AiRecommendCard .recommend-item×1、AiQuickReserve .room-pick-item×1。
  *
@@ -116,14 +116,17 @@ async function freeSlot(request, token) {
   throw new Error('候选时段全部被占用，无法造数')
 }
 
+/** 管理端首页快捷卡文案，与 AdminWelcome.vue 的 .quick-name 一一对应（顺序同页面）；数量由清单长度决定，不写死 */
+const ADMIN_QUICK_NAMES = ['用户管理', '教室资源管理', '预约审核', '预约记录', '使用记录', '开放时段', '数据看板']
+
 test.describe('键盘可达性（v-clickable）', () => {
-  test('管理端首页 5 个快捷卡片：语义完整，Tab/Enter/空格均可激活跳转', async ({ page }) => {
+  test('管理端首页 7 个快捷卡片：语义完整，Tab/Enter/空格均可激活跳转', async ({ page }) => {
     await loginAs(page, { who: 'admin', path: '/admin/home' })
     const cards = page.locator('.quick-card')
     const card = (name) => cards.filter({ has: page.locator('.quick-name', { hasText: name }) })
-    await expect(cards).toHaveCount(5)
+    await expect(cards).toHaveCount(ADMIN_QUICK_NAMES.length)
     await expectButtonSemantics(cards, '管理端快捷卡片')
-    await expect(page.locator('.quick-card[role="button"]')).toHaveCount(5)
+    await expect(page.locator('.quick-card[role="button"]')).toHaveCount(ADMIN_QUICK_NAMES.length)
     await expectTabReachable(page, card('用户管理'))
 
     // Enter 激活 → 与鼠标点击同路由
