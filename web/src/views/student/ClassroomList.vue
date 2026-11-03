@@ -2,8 +2,10 @@
   <div class="classroom-list-page page-container">
     <!-- 页面标题 -->
     <div class="page-head">
-      <span class="page-title">教室列表</span>
-      <span class="page-tip">共 {{ total }} 间教室 · 支持关键词 / 楼栋 / 类型 / 日期筛选</span>
+      <div class="head-left">
+        <span class="page-title">教室列表</span>
+        <span class="page-tip">共 {{ total }} 间教室 · 支持关键词 / 楼栋 / 类型 / 日期筛选</span>
+      </div>
     </div>
 
     <!-- AI 智能推荐卡片（R7，需求文档 2.4：教室列表页顶部「AI 为你推荐」；enabled=false 时整卡隐藏） -->
@@ -88,9 +90,9 @@
           <el-tag :type="typeTagType(room.type)" size="small" effect="plain" round>{{ typeText(room.type) }}</el-tag>
         </div>
 
-        <!-- 今日剩余可预约时段（需求 1.3 冲优项；后端返回 null/undefined 时隐藏，向后兼容） -->
-        <div v-if="room.todayRemainingSlots !== undefined && room.todayRemainingSlots !== null" class="remain-slots">
-          <el-icon><Clock /></el-icon>今日剩余 <b>{{ room.todayRemainingSlots }}</b> 时段可约
+        <!-- 今日剩余可约人数（需求 V4.1 2.5 第 6 条口径，与详情页开放时段容量同源；后端返回 null/undefined 时隐藏，向后兼容） -->
+        <div v-if="room.todayRemainingPeople !== undefined && room.todayRemainingPeople !== null" class="remain-slots">
+          <el-icon><Clock /></el-icon>今日剩余 <b>{{ room.todayRemainingPeople }}</b> 人可约
         </div>
 
         <div v-if="query.date && room.occupiedSlots && room.occupiedSlots.length" class="occupied-bar">
@@ -313,14 +315,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-tip {
-  font-size: 14px;
-  line-height: 22px;
-  color: var(--text-regular);
-}
-
 .search-card {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
   border-radius: var(--radius-lg);
 }
 .search-card :deep(.el-form-item) {
@@ -330,7 +326,7 @@ onMounted(() => {
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  gap: var(--space-md);
   min-height: 200px;
 }
 
@@ -340,7 +336,7 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color-light);
   box-shadow: none;
-  padding: 16px;
+  padding: var(--space-lg);
   cursor: pointer;
   position: relative;
   overflow: hidden;
@@ -510,7 +506,17 @@ onMounted(() => {
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: var(--space-md);
+}
+
+/* ---------- 响应式：笔记本窄屏 3 列降 2 列，卡片内边距收到 12px ---------- */
+@media (max-width: 1200px) {
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .room-card {
+    padding: var(--space-md);
+  }
 }
 
 /* ---------- 窄屏适配（P3-8：<480px 单列卡片 + 分页换行，避免横向溢出） ---------- */

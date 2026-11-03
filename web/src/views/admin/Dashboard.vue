@@ -1,8 +1,8 @@
 <template>
-  <div class="dashboard-page">
+  <div class="page-container-wide">
     <!-- 顶部：标题 + 时间范围筛选 -->
     <el-card shadow="never" class="filter-card">
-      <div class="filter-bar">
+      <div class="toolbar">
         <span class="page-title">数据看板</span>
         <el-radio-group v-model="quickRange" size="small" @change="handleQuickRange">
           <el-radio-button value="7">近 7 天</el-radio-button>
@@ -24,7 +24,7 @@
       </div>
     </el-card>
 
-    <!-- 三图表：使用率排行柱状图 / 月度趋势折线图 / 热门时段饼图 -->
+    <!-- 四图表（需求文档 V4.0 2.4 第 14 条）：使用率排行 / 热门时段 / 月度趋势 / 实际使用人数 -->
     <el-row :gutter="16">
       <el-col :span="14">
         <el-card shadow="never" class="chart-card">
@@ -46,6 +46,50 @@
       <div class="chart-sub">全部状态预约条数</div>
       <div ref="trendEl" class="chart-box chart-box-tall" />
     </el-card>
+
+    <!-- 第四图：实际使用人数统计（需求文档 V4.0 2.4 第 14 条「实际使用人数统计」） -->
+    <el-card shadow="never" class="chart-card">
+      <div class="chart-title">实际使用人数统计</div>
+      <div class="chart-sub">实到人数 / 预约人数，仅统计已登记使用的预约</div>
+      <div ref="actualPeopleEl" class="chart-box chart-box-mid" />
+    </el-card>
+
+    <!-- 实际使用明细：登记数 / 失约率 / 实际使用率（口径见需求文档 V4.0 模块六） -->
+    <el-card shadow="never" class="chart-card">
+      <div class="chart-title">实验室实际使用情况</div>
+      <div class="chart-sub">按登记记录统计，实际使用率 = 实际人时 / 区间可预约人时</div>
+      <el-table :data="actualUsageList" empty-text="暂无使用登记数据" size="small">
+        <el-table-column label="实验室" min-width="180">
+          <template #default="{ row }">
+            {{ row.building }} {{ row.roomNo }}
+            <span class="row-muted">{{ row.name }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="recordedCount" label="已登记" width="88" align="right" />
+        <el-table-column label="正常 / 部分 / 失约" width="168" align="right">
+          <template #default="{ row }">
+            <span class="count-normal">{{ row.normalCount }}</span>
+            <span class="count-sep">/</span>
+            <span class="count-partial">{{ row.partialCount }}</span>
+            <span class="count-sep">/</span>
+            <span class="count-noshow">{{ row.noShowCount }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="实到 / 预约人数" width="148" align="right">
+          <template #default="{ row }">{{ row.actualPeople }} / {{ row.plannedPeople }}</template>
+        </el-table-column>
+        <el-table-column prop="actualHours" label="实际人时" width="104" align="right" />
+        <el-table-column label="实际使用率" width="112" align="right">
+          <template #default="{ row }">{{ row.actualUsageRate }}%</template>
+        </el-table-column>
+        <el-table-column label="失约率" width="96" align="right">
+          <template #default="{ row }">{{ row.noShowRate }}%</template>
+        </el-table-column>
+        <el-table-column label="取消率" width="96" align="right">
+          <template #default="{ row }">{{ row.cancelRate }}%</template>
+        </el-table-column>
+      </el-table>
+    </el-card>
   </div>
 </template>
 
@@ -57,7 +101,7 @@ import { BarChart, LineChart, PieChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import dayjs from 'dayjs'
-import { getUsageRate, getTrend, getTimeDistribution } from '@/api/stats'
+import { getUsageRate, getTrend, getTimeDistribution, getActualUsage } from '@/api/stats'
 
 // 为满足 multi-word 规则并便于 devtools 辨识
 defineOptions({ name: 'DashboardView' })
@@ -85,13 +129,17 @@ const loading = ref(false)
 const quickRange = ref('30')
 const dateRange = ref([dayjs().subtract(29, 'day').format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD')])
 
+const actualUsageList = ref([])
+
 const usageRateEl = ref(null)
 const trendEl = ref(null)
 const timeDistEl = ref(null)
+const actualPeopleEl = ref(null)
 
 let usageChart = null
 let trendChart = null
 let timeDistChart = null
+let actualPeopleChart = null
 
 /** 当前区间参数（YYYY-MM-DD） */
 function rangeParams() {
@@ -124,14 +172,17 @@ async function loadAll() {
   loading.value = true
   try {
     const params = rangeParams()
-    const [usageRes, trendRes, distRes] = await Promise.all([
+    const [usageRes, trendRes, distRes, actualRes] = await Promise.all([
       getUsageRate(params),
       getTrend(params),
-      getTimeDistribution(params)
+      getTimeDistribution(params),
+      getActualUsage(params)
     ])
     renderUsageRate(usageRes.data || [])
     renderTrend(trendRes.data || [])
     renderTimeDistribution(distRes.data || [])
+    actualUsageList.value = actualRes.data || []
+    renderActualPeople(actualUsageList.value)
   } catch {
     // 统一错误提示已由 request.js 处理
   } finally {
@@ -153,6 +204,67 @@ function emptyGraphic(text) {
       }
     }
   ]
+}
+
+/**
+ * 柱状图：实际使用人数统计（需求文档 V4.0 2.4 第 14 条第四张图）
+ * 只取有登记记录的实验室；两色并列——实到人数用品牌蓝、预约人数用中性灰，避免双主色打架
+ */
+function renderActualPeople(list) {
+  const rows = list.filter((r) => r.recordedCount > 0)
+  if (!rows.length) {
+    actualPeopleChart.setOption({ graphic: emptyGraphic('暂无使用登记数据') }, true)
+    return
+  }
+  actualPeopleChart.setOption(
+    {
+      tooltip: {
+        trigger: 'axis',
+        formatter(params) {
+          const item = rows[params[0].dataIndex]
+          if (!item) {
+            return ''
+          }
+          return `${item.name}（${item.roomNo}）<br/>实到 ${item.actualPeople} 人 / 预约 ${item.plannedPeople} 人<br/>已登记 ${item.recordedCount} 条（正常 ${item.normalCount} / 部分 ${item.partialCount} / 失约 ${item.noShowCount}）`
+        }
+      },
+      legend: { top: 0, right: 0, fontSize: 12, textStyle: { color: CHART.axisText } },
+      grid: { left: 48, right: 24, top: 44, bottom: 72 },
+      xAxis: {
+        type: 'category',
+        data: rows.map((r) => r.name),
+        axisLabel: { rotate: 35, fontSize: 12, color: CHART.axisText },
+        axisLine: { lineStyle: { color: CHART.axisLine } },
+        axisTick: { show: false }
+      },
+      yAxis: {
+        type: 'value',
+        name: '人数',
+        minInterval: 1,
+        nameTextStyle: { color: CHART.emptyText },
+        axisLabel: { fontSize: 12, color: CHART.axisText },
+        splitLine: { lineStyle: { color: CHART.splitLine } }
+      },
+      series: [
+        {
+          name: '实到人数',
+          type: 'bar',
+          data: rows.map((r) => r.actualPeople),
+          barMaxWidth: 24,
+          itemStyle: { borderRadius: [4, 4, 0, 0], color: CHART.primary },
+          label: { show: true, position: 'top', fontSize: 12, color: CHART.labelText, fontWeight: 500 }
+        },
+        {
+          name: '预约人数',
+          type: 'bar',
+          data: rows.map((r) => r.plannedPeople),
+          barMaxWidth: 24,
+          itemStyle: { borderRadius: [4, 4, 0, 0], color: CHART.axisLine }
+        }
+      ]
+    },
+    true
+  )
 }
 
 /** 柱状图：教室使用率排行（按使用率倒序，后端已排序；扁平纯色柱 + 顶部标签） */
@@ -293,6 +405,7 @@ function initCharts() {
   usageChart = echarts.init(usageRateEl.value)
   trendChart = echarts.init(trendEl.value)
   timeDistChart = echarts.init(timeDistEl.value)
+  actualPeopleChart = echarts.init(actualPeopleEl.value)
   window.addEventListener('resize', handleResize)
 }
 
@@ -300,6 +413,7 @@ function handleResize() {
   usageChart && usageChart.resize()
   trendChart && trendChart.resize()
   timeDistChart && timeDistChart.resize()
+  actualPeopleChart && actualPeopleChart.resize()
 }
 
 onMounted(() => {
@@ -312,39 +426,23 @@ onBeforeUnmount(() => {
   usageChart && usageChart.dispose()
   trendChart && trendChart.dispose()
   timeDistChart && timeDistChart.dispose()
-  usageChart = trendChart = timeDistChart = null
+  actualPeopleChart && actualPeopleChart.dispose()
+  usageChart = trendChart = timeDistChart = actualPeopleChart = null
 })
 </script>
 
 <style scoped>
-.dashboard-page {
-  max-width: 1200px;
-  margin: 0 auto;
-}
+/* 页面限宽由全局 .page-container-wide 提供；筛选条由全局 .toolbar 提供 */
 
-.filter-card {
-  margin-bottom: 16px;
+/* 卡片间距与圆角统一；同一行图表卡片靠 height:100% 与 el-col 拉伸等高 */
+.filter-card,
+.chart-card {
+  margin-bottom: var(--space-lg);
   border-radius: var(--radius-lg);
-}
-
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.page-title {
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-right: 8px;
 }
 
 .chart-card {
-  margin-bottom: 16px;
-  border-radius: var(--radius-lg);
+  height: 100%;
 }
 
 .chart-title {
@@ -358,7 +456,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 20px;
   color: var(--text-placeholder);
-  margin: 4px 0 12px;
+  margin: var(--space-xs) 0 var(--space-md);
 }
 
 .chart-box {
@@ -367,5 +465,32 @@ onBeforeUnmount(() => {
 
 .chart-box-tall {
   height: 320px;
+}
+
+.chart-box-mid {
+  height: 320px;
+}
+
+.row-muted {
+  margin-left: var(--space-sm);
+  font-size: 12px;
+  color: var(--text-placeholder);
+}
+
+.count-sep {
+  margin: 0 var(--space-xs);
+  color: var(--text-placeholder);
+}
+
+.count-normal {
+  color: var(--el-color-success-dark-2);
+}
+
+.count-partial {
+  color: var(--el-color-warning-dark-2);
+}
+
+.count-noshow {
+  color: var(--el-color-danger-dark-2);
 }
 </style>

@@ -7,9 +7,10 @@
           <el-icon :size="30"><OfficeBuilding /></el-icon>
         </div>
         <h1 class="brand-name">高校实验室预约管理系统</h1>
-        <p class="brand-slogan">注册学生账号，开启高效预约体验</p>
+        <p class="brand-slogan">注册学生 / 教师账号，开启高效预约体验</p>
         <ul class="brand-points">
-          <li><el-icon><CircleCheckFilled /></el-icon>学号实名认证，预约安全可信</li>
+          <li><el-icon><CircleCheckFilled /></el-icon>学号 / 工号实名认证，预约安全可信</li>
+          <li><el-icon><Clock /></el-icon>教师单次预约时长上限更宽松，排课更从容</li>
           <li><el-icon><Calendar /></el-icon>日历总览 + AI 智能推荐</li>
           <li><el-icon><DataLine /></el-icon>可视化数据看板，资源一目了然</li>
         </ul>
@@ -20,12 +21,22 @@
     <!-- 右侧注册表单区 -->
     <div class="register-panel">
       <div class="register-card">
-        <h2 class="login-title">学生注册</h2>
+        <h2 class="login-title">{{ isTeacher ? '教师注册' : '学生注册' }}</h2>
         <p class="login-subtitle">注册成功后即可登录预约实验室 / 教室</p>
 
         <el-form ref="formRef" :model="form" :rules="rules" label-width="80px" size="large">
-          <el-form-item label="学号" prop="studentNo">
-            <el-input v-model="form.studentNo" placeholder="请输入学号" maxlength="20" />
+          <el-form-item label="注册身份" prop="role">
+            <el-radio-group v-model="form.role" class="role-group" aria-label="选择注册身份">
+              <el-radio-button :value="0">学生</el-radio-button>
+              <el-radio-button :value="2">教师</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item :label="isTeacher ? '工号' : '学号'" prop="studentNo">
+            <el-input
+              v-model="form.studentNo"
+              :placeholder="isTeacher ? '请输入工号' : '请输入学号'"
+              maxlength="20"
+            />
           </el-form-item>
           <el-form-item label="姓名" prop="name">
             <el-input v-model="form.name" placeholder="请输入真实姓名" maxlength="20" />
@@ -59,10 +70,10 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { OfficeBuilding, CircleCheckFilled, Calendar, DataLine } from '@element-plus/icons-vue'
+import { OfficeBuilding, CircleCheckFilled, Calendar, DataLine, Clock } from '@element-plus/icons-vue'
 import { register as registerApi } from '@/api/user'
 
 // 为满足 multi-word 规则并便于 devtools 辨识
@@ -73,6 +84,7 @@ const formRef = ref()
 const loading = ref(false)
 
 const form = reactive({
+  role: 0,
   studentNo: '',
   name: '',
   phone: '',
@@ -81,6 +93,9 @@ const form = reactive({
   password: '',
   confirmPassword: ''
 })
+
+/** 注册身份（需求设计文档 V4.0 1.3：学生/教师可自主注册，注册页不提供管理员选项） */
+const isTeacher = computed(() => form.role === 2)
 
 /** 确认密码一致性校验 */
 function validateConfirmPassword(rule, value, callback) {
@@ -105,7 +120,18 @@ function validatePhone(rule, value, callback) {
 }
 
 const rules = {
-  studentNo: [{ required: true, message: '请输入学号', trigger: 'blur' }],
+  studentNo: [
+    {
+      validator: (rule, value, callback) => {
+        if (!value) {
+          callback(new Error(isTeacher.value ? '请输入工号' : '请输入学号'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ],
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   phone: [{ validator: validatePhone, trigger: 'blur' }],
   username: [{ required: true, message: '请输入登录账号', trigger: 'blur' }],
@@ -232,16 +258,16 @@ async function handleRegister() {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 24px;
+  padding: var(--space-xl) var(--space-lg);
 }
 .register-card {
   width: 520px;
   max-width: 100%;
   background: var(--bg-card);
   border-radius: var(--radius-lg);
-  padding: 32px;
+  padding: var(--space-xl);
   border: 1px solid var(--border-color-light);
-  box-shadow: var(--shadow-raised);
+  box-shadow: none;
 }
 .login-title {
   font-size: 24px;
@@ -255,6 +281,32 @@ async function handleRegister() {
   line-height: 22px;
   color: var(--text-regular);
   margin-bottom: 20px;
+}
+/* 注册身份单选：与登录页一套视觉——两个等宽独立胶囊，不用 EP 首尾相接分段按钮 */
+.role-group {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.role-group :deep(.el-radio-button) {
+  flex: 1;
+}
+.role-group :deep(.el-radio-button__inner) {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-regular);
+  font-weight: 500;
+  box-shadow: none;
+}
+.role-group :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner),
+.role-group :deep(.el-radio-button.is-active .el-radio-button__original-radio:not(:disabled) + .el-radio-button__inner) {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: none;
 }
 .register-btn {
   width: 100%;
@@ -278,6 +330,16 @@ async function handleRegister() {
 @media (max-width: 900px) {
   .register-brand {
     display: none;
+  }
+}
+
+/* 平板 / 手机：面板与卡片内边距收到 16px 下限，375px 宽度下 7 项表单与 80px 标签列仍不横向溢出 */
+@media (max-width: 768px) {
+  .register-panel {
+    padding: var(--space-lg);
+  }
+  .register-card {
+    padding: var(--space-lg);
   }
 }
 </style>

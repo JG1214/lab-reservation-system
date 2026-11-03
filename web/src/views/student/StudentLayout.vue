@@ -7,7 +7,7 @@
           <el-icon :size="16"><OfficeBuilding /></el-icon>
         </div>
         <span class="header-logo">高校实验室预约管理系统</span>
-        <span class="role-chip">学生端</span>
+        <span class="role-chip">{{ isTeacher ? '教师端' : '学生端' }}</span>
       </div>
       <div class="header-right">
         <el-menu mode="horizontal" :default-active="activeMenu" router class="header-menu" :ellipsis="false">
@@ -22,6 +22,10 @@
           <el-menu-item index="/student/calendar">
             <el-icon><Calendar /></el-icon>
             <span>日历总览</span>
+          </el-menu-item>
+          <el-menu-item v-if="isTeacher" index="/student/occupancy">
+            <el-icon><Grid /></el-icon>
+            <span>占用总览</span>
           </el-menu-item>
           <el-menu-item index="/student/profile">
             <el-icon><User /></el-icon>
@@ -69,6 +73,7 @@ import { ElMessageBox } from 'element-plus'
 import {
   CaretBottom,
   Calendar,
+  Grid,
   OfficeBuilding,
   School,
   SwitchButton,
@@ -83,6 +88,9 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const userInfo = computed(() => userStore.userInfo)
+
+/** 教师(role=2)：与学生共用布局，仅多一个「占用总览」入口（需求文档 V4.0 1.2） */
+const isTeacher = computed(() => userInfo.value && userInfo.value.role === 2)
 
 /** 头像占位：取姓名末位，多字取后两字 */
 const avatarText = computed(() => {
@@ -255,8 +263,15 @@ async function handleLogout() {
 
 .student-main {
   background: var(--bg-page);
-  padding: 24px;
+  padding: var(--space-xl);
   overflow-y: auto;
+}
+
+/* 内容区留白跟随全局断点收紧，各页面不再自带水平内边距 */
+@media (max-width: 1200px) {
+  .student-main {
+    padding: var(--space-lg);
+  }
 }
 
 /* ---------- 窄屏适配（P3-8：<800px 顶栏压缩，菜单仅留图标；<560px 隐藏品牌文字） ---------- */
@@ -288,7 +303,7 @@ async function handleLogout() {
     display: none;
   }
   .student-main {
-    padding: 12px;
+    padding: var(--space-md);
   }
 }
 </style>

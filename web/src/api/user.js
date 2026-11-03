@@ -49,3 +49,13 @@ export function updateUserStatus(id, status) {
 export function resetUserPassword(id) {
   return request.put(`/user/manage/${id}/password`)
 }
+
+/** 管理端：新建用户（角色 0-学生 / 1-管理员 / 2-教师，学生必填学号） */
+export function createUser(data) {
+  return request.post('/user/manage', data)
+}
+
+/** 管理端：修改用户角色（role: 0-学生, 1-管理员, 2-教师；禁止修改自己） */
+export function updateUserRole(id, role) {
+  return request.put(`/user/manage/${id}/role`, { role })
+}

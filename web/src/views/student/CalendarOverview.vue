@@ -1,5 +1,5 @@
 <template>
-  <div class="calendar-page">
+  <div class="page-container">
     <el-card shadow="never">
       <!-- 顶部工具栏：教室筛选 + 视图切换 + 状态图例 -->
       <div class="toolbar">
@@ -366,11 +366,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.calendar-page {
-  max-width: 1120px;
-  margin: 0 auto;
-}
-
 .toolbar {
   display: flex;
   align-items: center;

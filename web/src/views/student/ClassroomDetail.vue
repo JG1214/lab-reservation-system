@@ -37,6 +37,10 @@
         <el-descriptions-item label="容纳人数">{{ classroom.capacity }} 人</el-descriptions-item>
         <el-descriptions-item label="设备说明">{{ classroom.equipment || '-' }}</el-descriptions-item>
         <el-descriptions-item label="备注描述">{{ classroom.description || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="开放要求" :span="3">
+          <span v-if="classroom.openRequirement" class="open-requirement">{{ classroom.openRequirement }}</span>
+          <span v-else>无特殊要求</span>
+        </el-descriptions-item>
       </el-descriptions>
     </el-card>
 
@@ -53,6 +57,18 @@
           style="width: 180px"
           @change="loadDetail"
         />
+      </div>
+
+      <!-- 该日可用开放时段（需求设计文档 V4.0 规则 3） -->
+      <div class="open-slots">
+        <span class="open-slots-label">{{ queryDate || '今天' }} 可预约时段</span>
+        <template v-if="daySlots.length">
+          <el-tag v-for="s in daySlots" :key="s.id" type="success" effect="plain" class="open-slot-tag">
+            {{ formatClock(s.openTime) }}–{{ formatClock(s.closeTime) }}
+            <span class="open-slot-capacity">上限 {{ s.slotCapacity }} 人</span>
+          </el-tag>
+        </template>
+        <el-text v-else type="warning" size="small">该实验室当日未开放，无法提交预约</el-text>
       </div>
 
       <!-- 横向时间轴可视化（08:00-22:00） -->
@@ -146,6 +162,17 @@
             style="width: 100%"
           />
         </el-form-item>
+        <el-form-item label="预约人数" prop="peopleCount">
+          <el-input-number
+            v-model="reserveForm.peopleCount"
+            :min="1"
+            :max="peopleCountMax"
+            style="width: 100%"
+          />
+          <div class="form-hint">
+            教室容量 {{ classroom.capacity || '—' }} 人<span v-if="capacityHint">；{{ capacityHint.text }}</span>
+          </div>
+        </el-form-item>
         <el-form-item label="预约用途" prop="purpose">
           <el-input
             v-model="reserveForm.purpose"
@@ -192,11 +219,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Calendar, Notebook, Cpu, School, Star, StarFilled } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { getClassroomDetail } from '@/api/classroom'
 import { checkConflict, submitReservation } from '@/api/reservation'
+import { listClassroomSlots } from '@/api/slot'
 import { toggleFavorite, getFavoriteList } from '@/api/favorite'
 import { validateBooking } from '@/utils/booking'
 import { useUserStore } from '@/stores/user'
@@ -218,7 +246,13 @@ const favoriteLoading = ref(false)
 const reserveVisible = ref(false)
 const submitting = ref(false)
 const reserveFormRef = ref(null)
-const reserveForm = reactive({ reserveDate: '', startTime: '', endTime: '', purpose: '' })
+const reserveForm = reactive({ reserveDate: '', startTime: '', endTime: '', peopleCount: 1, purpose: '' })
+/** 选中日期的开放时段（规则 3：后端同口径判定，前端仅做即时提示） */
+const daySlots = ref([])
+/** daySlots 对应的日期；与预约日期不一致时说明时段数据已过期，需先重新拉取 */
+const daySlotDate = ref('')
+/** 剩余容量提示（规则 2：人数上限 - 该时段已通过人数之和） */
+const capacityHint = ref(null)
 const conflictInfo = ref(null)
 /** 前端时间合理性校验提示（L9 优化：开始时间必须早于结束时间；后端仍强制兜底） */
 const timeError = ref('')
@@ -230,6 +264,7 @@ const reserveRules = {
   reserveDate: [{ required: true, message: '请选择预约日期', trigger: 'change' }],
   startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
   endTime: [{ required: true, message: '请选择结束时间', trigger: 'change' }],
+  peopleCount: [{ required: true, message: '请填写预约人数', trigger: 'blur' }],
   purpose: [{ required: true, message: '请填写预约用途', trigger: 'blur' }]
 }
 
@@ -255,11 +290,57 @@ async function loadDetail() {
     }
     const res = await getClassroomDetail(id, params)
     classroom.value = res.data
+    loadDaySlots()
   } catch {
     // 统一错误提示已由 request.js 处理
   } finally {
     loading.value = false
   }
+}
+
+/** 加载该实验室指定日期的生效开放时段（规则 3：无时段 = 当日不可预约） */
+async function loadDaySlots(date) {
+  const target = date || queryDate.value || dayjs().format('YYYY-MM-DD')
+  try {
+    const res = await listClassroomSlots(route.params.id, target)
+    daySlots.value = res.data || []
+  } catch {
+    daySlots.value = []
+  }
+  daySlotDate.value = target
+}
+
+/**
+ * 按预约日期刷新开放时段（规则 3 前端第一层校验的数据源）
+ * 原因：openSlots 原仅在详情页加载时取过一次，用户把预约日期改到别的日后，
+ * inAnySlot 仍拿旧日期的时段判定，会误放行未开放的日期。提交与实时校验前统一先对齐。
+ */
+let slotSeq = 0
+async function syncDaySlots(date) {
+  const seq = ++slotSeq
+  await loadDaySlots(date)
+  if (seq !== slotSeq) {
+    // 更晚的日期变更请求已发出，丢弃本次结果
+    return
+  }
+}
+
+/** 判断所选时间是否完整落在某个开放时段窗口内（与后端 requireEffectiveSlot 同口径） */
+function inAnySlot(start, end) {
+  return daySlots.value.some((s) => {
+    const open = formatClock(s.openTime)
+    const close = formatClock(s.closeTime)
+    return start >= open && end <= close
+  })
+}
+
+/** 时间展示：08:00:00 → 08:00 */
+function formatClock(value) {
+  if (!value) {
+    return '-'
+  }
+  const text = String(value)
+  return text.length > 5 ? text.slice(0, 5) : text
 }
 
 /** 加载收藏状态：当前教室是否已收藏（同步收藏按钮） */
@@ -318,6 +399,7 @@ function openReserveDialog() {
     reserveForm.reserveDate = draft.reserveDate
     reserveForm.startTime = draft.startTime || ''
     reserveForm.endTime = draft.endTime || ''
+    reserveForm.peopleCount = draft.peopleCount || 1
     reserveForm.purpose = draft.purpose || ''
   } else {
     reserveForm.reserveDate = dayjs().format('YYYY-MM-DD')
@@ -349,6 +431,7 @@ function saveDraft() {
       reserveDate: reserveForm.reserveDate,
       startTime: reserveForm.startTime,
       endTime: reserveForm.endTime,
+      peopleCount: reserveForm.peopleCount,
       purpose: reserveForm.purpose
     })
   )
@@ -378,6 +461,7 @@ function resetReserveForm() {
   reserveForm.endTime = ''
   reserveForm.purpose = ''
   conflictInfo.value = null
+  capacityHint.value = null
 }
 
 /**
@@ -389,10 +473,18 @@ let conflictSeq = 0
 watch(
   () => [reserveForm.reserveDate, reserveForm.startTime, reserveForm.endTime],
   async ([date, start, end]) => {
+    capacityHint.value = null
     if (!date || !start || !end) {
       conflictInfo.value = null
       timeError.value = ''
       return
+    }
+    // 时段数据必须与预约日期对齐，否则 inAnySlot 会用错日期的开放时段
+    if (date !== daySlotDate.value) {
+      await syncDaySlots(date)
+      if (date !== daySlotDate.value) {
+        return
+      }
     }
     // 前端时间合理性校验：开始时间必须早于结束时间（L9 优化，后端仍强制兜底）
     if (start >= end) {
@@ -414,14 +506,49 @@ watch(
         return
       }
       conflictInfo.value = res.data
+      buildCapacityHint(res.data)
     } catch {
       if (seq !== conflictSeq) {
         return
       }
       conflictInfo.value = null
+      capacityHint.value = null
     }
   }
 )
+
+/**
+ * 由冲突检测接口回带的 capacityLimit / approvedPeople 换算剩余容量
+ * 后端 fillSlotInfo 在时间不冲突时也会回带这两项，前端据此给出「还剩几人」的即时提示，
+ * 让人数输入框的上限随所选时段浮动，避免提交后才看到超员报错。
+ */
+function buildCapacityHint(info) {
+  if (!info || info.conflict || !info.capacityLimit) {
+    capacityHint.value = null
+    return
+  }
+  const limit = Number(info.capacityLimit)
+  const used = Number(info.approvedPeople || 0)
+  const remaining = Math.max(limit - used, 0)
+  capacityHint.value = {
+    limit,
+    used,
+    remaining,
+    text: remaining > 0
+      ? `该时段上限 ${limit} 人，已预约 ${used} 人，剩余 ${remaining} 人`
+      : `该时段 ${limit} 人容量已约满，请更换时段`
+  }
+}
+
+/** 人数输入框上限：取教室容量与所选时段剩余容量的较小值 */
+const peopleCountMax = computed(() => {
+  const roomCapacity = Number(classroom.value.capacity) || 1
+  if (!capacityHint.value) {
+    return roomCapacity
+  }
+  // 编辑已有预约时可回填的原人数需保留，故上限至少为当前值
+  return Math.max(Math.min(roomCapacity, capacityHint.value.remaining), reserveForm.peopleCount, 1)
+})
 
 /** 提交预约（后端二次冲突检测兜底；成功后清除草稿） */
 async function handleSubmitReserve() {
@@ -440,6 +567,29 @@ async function handleSubmitReserve() {
     ElMessage.warning(check.message)
     return
   }
+  // 规则 3：所选时间须完整落在预订日期的某个开放时段内（后端强制兜底，此处提前拦截减少往返）
+  await syncDaySlots(reserveForm.reserveDate)
+  if (!inAnySlot(reserveForm.startTime, reserveForm.endTime)) {
+    ElMessage.warning('所选时间须完整落在当日开放时段内，且不可跨时段预约')
+    return
+  }
+  // 规则 2：本地先算一次剩余容量，避免明显超员的请求白跑一趟（后端仍强制兜底）
+  const overCapacity = capacityHint.value && capacityHint.value.remaining < reserveForm.peopleCount
+  if (overCapacity) {
+    ElMessage.warning(capacityHint.value.text)
+    return
+  }
+  // 提交前二次确认：预约是学生可撤销但有时间成本的写操作，避免误触提交
+  try {
+    await ElMessageBox.confirm(
+      `确认为「${classroom.value.name}（${classroom.value.roomNo}）」提交 ${reserveForm.reserveDate} ` +
+        `${reserveForm.startTime}-${reserveForm.endTime}、${reserveForm.peopleCount} 人的预约吗？提交后需等待管理员审核。`,
+      '预约确认',
+      { confirmButtonText: '确认提交', cancelButtonText: '再改改', type: 'warning' }
+    )
+  } catch {
+    return
+  }
   submitting.value = true
   try {
     const res = await submitReservation({
@@ -447,6 +597,7 @@ async function handleSubmitReserve() {
       reserveDate: reserveForm.reserveDate,
       startTime: reserveForm.startTime,
       endTime: reserveForm.endTime,
+      peopleCount: reserveForm.peopleCount,
       purpose: reserveForm.purpose
     })
     ElMessage.success(res.message || '预约提交成功，待管理员审核')
@@ -496,7 +647,7 @@ onMounted(() => {
 }
 
 .info-card {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
   border-radius: var(--radius-lg);
 }
 
@@ -563,8 +714,44 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-.slots-card {
+/* 开放要求：作为准入门槛，用警示色与常规信息区分，避免与备注混同 */
+.open-requirement {
+  color: var(--brand-warning);
+  font-weight: 500;
+}
+
+/* 当日可用开放时段：与占用时间轴并列展示，先看"能不能约"再看"约哪段" */
+.open-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
   margin-bottom: 16px;
+}
+
+.open-slots-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.open-slot-tag {
+  font-variant-numeric: tabular-nums;
+}
+
+.open-slot-capacity {
+  margin-left: 6px;
+  opacity: 0.75;
+}
+
+.form-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+
+.slots-card {
+  margin-bottom: var(--space-md);
   border-radius: var(--radius-lg);
 }
 
@@ -630,7 +817,7 @@ onMounted(() => {
   font-size: 14px;
   line-height: 22px;
   background: var(--brand-success-light);
-  border: 1px solid var(--el-color-success-light-7);
+  border: 1px solid var(--border-color-light);
   border-radius: var(--radius-md);
   padding: 12px;
   display: inline-block;
@@ -646,6 +833,17 @@ onMounted(() => {
 }
 
 .conflict-alert {
-  margin-top: 4px;
+  margin-top: var(--space-xs);
+}
+
+/* ---------- 响应式：窄屏下头部与时段工具条折行，避免日期选择器挤出容器 ---------- */
+@media (max-width: 768px) {
+  .info-head {
+    flex-wrap: wrap;
+  }
+  .slots-head {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
 }
 </style>

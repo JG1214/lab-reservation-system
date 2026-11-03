@@ -28,7 +28,8 @@ const routes = [
     path: '/student',
     component: () => import('@/views/student/StudentLayout.vue'),
     redirect: '/student/home',
-    meta: { requiresAuth: true, roles: [0] },
+    // 学生(0)与教师(2)共用学生端布局；教师侧边栏额外渲染「实验室占用总览」
+    meta: { requiresAuth: true, roles: [0, 2] },
     children: [
       {
         path: 'home',
@@ -59,6 +60,13 @@ const routes = [
         name: 'CalendarOverview',
         component: () => import('@/views/student/CalendarOverview.vue'),
         meta: { title: '预约日历总览' }
+      },
+      {
+        // 实验室占用总览（需求文档 V4.0 1.2）：教师专属入口，学生可访问但侧边栏不显示
+        path: 'occupancy',
+        name: 'LabOccupancy',
+        component: () => import('@/views/student/LabOccupancy.vue'),
+        meta: { title: '实验室占用总览' }
       }
     ]
   },
@@ -100,6 +108,20 @@ const routes = [
         meta: { title: '预约记录' }
       },
       {
+        // 开放时段管理（需求设计文档 V4.0 规则 3）
+        path: 'slots',
+        name: 'SlotManage',
+        component: () => import('@/views/admin/SlotManage.vue'),
+        meta: { title: '开放时段管理' }
+      },
+      {
+        // 使用记录与失约登记（需求设计文档 V4.0 模块五）
+        path: 'usage',
+        name: 'UsageManage',
+        component: () => import('@/views/admin/UsageManage.vue'),
+        meta: { title: '使用记录' }
+      },
+      {
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('@/views/admin/Dashboard.vue'),
@@ -116,7 +138,7 @@ const router = createRouter({
 })
 
 /** 角色首页映射 */
-const roleHome = { 0: '/student/home', 1: '/admin/home' }
+const roleHome = { 0: '/student/home', 1: '/admin/home', 2: '/student/home' }
 
 /**
  * 预约规则每次会话只下发一次：首次进入受保护页面（登录后跳转 / 刷新直达）时拉取并注入 booking.js。

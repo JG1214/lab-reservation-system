@@ -45,3 +45,4 @@ export function listClassrooms(params) {
 export function getClassroomDetail(id, params) {
   return request.get(`/classroom/${id}`, { params })
 }
+

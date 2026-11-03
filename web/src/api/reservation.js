@@ -20,9 +20,9 @@ export function getMyReservations(params) {
   return request.get('/reservation/mine', { params })
 }
 
-/** 取消预约（开始前 1 小时内禁止） */
-export function cancelReservation(id) {
-  return request.put(`/reservation/${id}/cancel`)
+/** 取消预约（开始前 1 小时内禁止；V4.0 起因必填并写入 cancel_reason） */
+export function cancelReservation(id, reason) {
+  return request.put(`/reservation/${id}/cancel`, { reason })
 }
 
 /** 管理端：全量预约查询（status/startDate/endDate/keyword/classroomId） */

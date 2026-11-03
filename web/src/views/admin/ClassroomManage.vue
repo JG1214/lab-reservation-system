@@ -1,9 +1,14 @@
 <template>
-  <div class="manage-page">
+  <div class="manage-page page-container-wide">
     <!-- 页面标题栏 -->
     <div class="page-head">
-      <span class="page-title">教室管理</span>
-      <span class="page-tip">新增、编辑、启用/停用与批量管理教室资源</span>
+      <div class="head-left">
+        <h2 class="page-title">教室管理</h2>
+        <span class="page-tip">新增、编辑、启用/停用与批量管理教室资源</span>
+      </div>
+      <div class="head-actions">
+        <el-button type="primary" :icon="Plus" @click="openDialog()">新增教室</el-button>
+      </div>
     </div>
     <!-- 搜索栏 -->
     <el-card shadow="never" class="search-card">
@@ -43,7 +48,6 @@
     <!-- 教室表格 -->
     <el-card shadow="never">
       <div class="toolbar">
-        <el-button type="primary" :icon="Plus" @click="openDialog()">新增教室</el-button>
         <el-button
           type="success"
           plain
@@ -71,8 +75,8 @@
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="46" />
-        <el-table-column prop="id" label="ID" width="60" />
-        <el-table-column prop="name" label="教室名称" min-width="140" />
+        <el-table-column prop="id" label="ID" width="60" align="right" />
+        <el-table-column prop="name" label="教室名称" min-width="140" show-overflow-tooltip />
         <el-table-column prop="building" label="楼栋" width="90" />
         <el-table-column prop="roomNo" label="编号" width="90" />
         <el-table-column prop="type" label="类型" width="100">
@@ -80,7 +84,7 @@
             <el-tag :type="typeTagType(row.type)" size="small">{{ typeText(row.type) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="capacity" label="容量" width="80" />
+        <el-table-column prop="capacity" label="容量" width="80" align="right" />
         <el-table-column prop="equipment" label="设备说明" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">{{ row.equipment || '-' }}</template>
         </el-table-column>
@@ -154,6 +158,16 @@
         <el-form-item label="设备说明" prop="equipment">
           <el-input v-model="form.equipment" type="textarea" :rows="2" maxlength="255" placeholder="选填" />
         </el-form-item>
+        <el-form-item label="开放要求" prop="openRequirement">
+          <el-input
+            v-model="form.openRequirement"
+            type="textarea"
+            :rows="2"
+            maxlength="255"
+            show-word-limit
+            placeholder="选填，例如：须穿实验服、须有指导教师在场、禁止饮食"
+          />
+        </el-form-item>
         <el-form-item label="备注描述" prop="description">
           <el-input v-model="form.description" type="textarea" :rows="2" maxlength="255" placeholder="选填" />
         </el-form-item>
@@ -201,7 +215,7 @@ const query = reactive({
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const formRef = ref(null)
-const emptyForm = { id: null, name: '', building: '', roomNo: '', type: null, capacity: 1, equipment: '', description: '' }
+const emptyForm = { id: null, name: '', building: '', roomNo: '', type: null, capacity: 1, equipment: '', description: '', openRequirement: '' }
 const form = reactive({ ...emptyForm })
 
 /** 表单校验规则（与后端一致：必填 + 容量>0） */
@@ -277,7 +291,8 @@ function openDialog(row) {
       type: row.type,
       capacity: row.capacity,
       equipment: row.equipment || '',
-      description: row.description || ''
+      description: row.description || '',
+    openRequirement: row.openRequirement || ''
     })
   } else {
     Object.assign(form, emptyForm)
@@ -380,18 +395,12 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+/* 限宽 + 页头/搜索/表格三段统一 12px 节奏 */
 .manage-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 4px;
-}
-
-.page-tip {
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--text-regular);
-}
-
-.search-card {
-  margin-bottom: 16px;
 }
 
 .toolbar {
@@ -402,5 +411,13 @@ onMounted(loadData)
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+/* 窄屏：批量启用/停用按钮组整行堆叠，避免与表格抢宽度 */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

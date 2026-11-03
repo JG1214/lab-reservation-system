@@ -1,9 +1,22 @@
 <template>
-  <div class="record-page">
+  <div class="record-page page-container-wide">
     <!-- 页面标题栏 -->
     <div class="page-head">
-      <span class="page-title">预约记录</span>
-      <span class="page-tip">全量预约记录查询与 Excel 导出</span>
+      <div class="head-left">
+        <h2 class="page-title">预约记录</h2>
+        <span class="page-tip">全量预约记录查询与 Excel 导出</span>
+      </div>
+      <div class="head-actions">
+        <el-button
+          type="primary"
+          plain
+          :icon="Download"
+          :loading="exporting"
+          @click="handleExport"
+        >
+          导出 Excel
+        </el-button>
+      </div>
     </div>
     <!-- 搜索栏：日期范围 / 教室 / 用户 / 状态 多条件筛选（需求文档 2.4 第 12 页） -->
     <el-card shadow="never" class="search-card">
@@ -52,6 +65,14 @@
             <el-option label="已取消" :value="3" />
           </el-select>
         </el-form-item>
+        <el-form-item label="失约标记">
+          <el-select v-model="query.useStatus" placeholder="全部" clearable style="width: 120px">
+            <el-option label="未登记" :value="0" />
+            <el-option label="正常使用" :value="1" />
+            <el-option label="部分使用" :value="2" />
+            <el-option label="失约" :value="3" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
           <el-button :icon="Refresh" @click="handleReset">重置</el-button>
@@ -62,19 +83,10 @@
     <el-card shadow="never">
       <div class="toolbar">
         <span class="toolbar-tip">共 {{ total }} 条记录，可按条件导出 Excel</span>
-        <el-button
-          type="primary"
-          plain
-          :icon="Download"
-          :loading="exporting"
-          @click="handleExport"
-        >
-          导出 Excel
-        </el-button>
       </div>
 
       <el-table v-loading="loading" :data="records" stripe>
-        <el-table-column prop="id" label="ID" width="60" />
+        <el-table-column prop="id" label="ID" width="60" align="right" />
         <el-table-column label="预约人" width="120">
           <template #default="{ row }">
             <div class="user-cell">
@@ -101,8 +113,30 @@
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="使用情况" width="120">
+          <template #default="{ row }">
+            <el-tag :type="useStatusTagType(row.useStatus)" size="small">
+              {{ useStatusText(row.useStatus) }}
+            </el-tag>
+            <span
+              v-if="row.actualPeople !== null && row.actualPeople !== undefined"
+              class="use-people"
+            >
+              实到 {{ row.actualPeople }} 人
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column prop="auditRemark" label="审核备注" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.auditRemark || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="取消信息" min-width="160">
+          <template #default="{ row }">
+            <div v-if="row.status === 3" class="cancel-cell">
+              <span class="cancel-reason">{{ row.cancelReason || '未填写原因' }}</span>
+              <span class="cancel-time">{{ formatDateTime(row.cancelTime) }}</span>
+            </div>
+            <span v-else>-</span>
+          </template>
         </el-table-column>
         <el-table-column label="创建时间" width="160">
           <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
@@ -136,7 +170,7 @@ import dayjs from 'dayjs'
 import { Search, Refresh, Download } from '@element-plus/icons-vue'
 import { pageManageReservations, exportReservations } from '@/api/reservation'
 import { pageClassrooms } from '@/api/classroom'
-import { statusText, statusTagType } from '@/utils/dict'
+import { statusText, statusTagType, useStatusText, useStatusTagType } from '@/utils/dict'
 
 const loading = ref(false)
 const exporting = ref(false)
@@ -145,12 +179,13 @@ const total = ref(0)
 const dateRange = ref(null)
 const classroomOptions = ref([])
 
-/** 查询条件（含分页）；classroomId 为 R6 新增「教室」筛选参数 */
+/** 查询条件（含分页）；classroomId 为 R6 新增「教室」筛选，useStatus 为 V4.0 新增「失约标记」筛选 */
 const query = reactive({
   page: 1,
   size: 10,
   status: undefined,
   classroomId: undefined,
+  useStatus: undefined,
   keyword: ''
 })
 
@@ -160,6 +195,9 @@ function buildParams() {
   if (query.status !== undefined && query.status !== null && query.status !== '') params.status = query.status
   if (query.classroomId !== undefined && query.classroomId !== null && query.classroomId !== '') {
     params.classroomId = query.classroomId
+  }
+  if (query.useStatus !== undefined && query.useStatus !== null && query.useStatus !== '') {
+    params.useStatus = query.useStatus
   }
   if (query.keyword) params.keyword = query.keyword.trim()
   if (dateRange.value && dateRange.value.length === 2) {
@@ -202,6 +240,7 @@ function handleSearch() {
 function handleReset() {
   query.status = undefined
   query.classroomId = undefined
+  query.useStatus = undefined
   query.keyword = ''
   dateRange.value = null
   query.page = 1
@@ -242,24 +281,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 限宽 + 页头/搜索/表格三段统一 12px 节奏 */
 .record-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 4px;
 }
 
-.page-tip {
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--text-regular);
-}
-
-.search-card {
-  margin-bottom: 16px;
-}
-
+/* 只补差异：flex 布局与 8px 间距来自全局 .toolbar */
 .toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-bottom: 12px;
 }
 
@@ -273,10 +304,42 @@ onMounted(() => {
 .room-cell {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+
+/* 长账号 / 长实验室名 / 长取消原因单行截断，避免把行高撑成两行 */
+.user-cell > span,
+.room-cell > span,
+.cancel-cell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-account,
 .room-no {
+  font-size: 12px;
+  color: var(--text-placeholder);
+}
+
+.use-people {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-regular);
+}
+
+.cancel-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cancel-reason {
+  color: var(--text-primary);
+}
+
+.cancel-time {
   font-size: 12px;
   color: var(--text-placeholder);
 }
@@ -290,5 +353,13 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+/* 窄屏：记录计数与导出按钮不再两端对齐，导出按钮整行可点 */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

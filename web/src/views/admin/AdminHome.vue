@@ -32,7 +32,7 @@
 
     <el-container class="admin-body">
       <!-- 侧边导航菜单（管理端入口） -->
-      <el-aside width="216px" class="admin-aside">
+      <el-aside width="var(--admin-aside-w, 216px)" class="admin-aside">
         <el-menu :default-active="activeMenu" router class="admin-menu">
           <el-menu-item index="/admin/home">
             <el-icon><HomeFilled /></el-icon>
@@ -46,6 +46,10 @@
             <el-icon><School /></el-icon>
             <span>教室资源管理</span>
           </el-menu-item>
+          <el-menu-item index="/admin/slots">
+            <el-icon><Calendar /></el-icon>
+            <span>开放时段管理</span>
+          </el-menu-item>
           <el-menu-item index="/admin/audits">
             <el-icon><Checked /></el-icon>
             <span>预约审核</span>
@@ -53,6 +57,10 @@
           <el-menu-item index="/admin/records">
             <el-icon><Tickets /></el-icon>
             <span>预约记录</span>
+          </el-menu-item>
+          <el-menu-item index="/admin/usage">
+            <el-icon><DocumentChecked /></el-icon>
+            <span>使用记录</span>
           </el-menu-item>
           <el-menu-item index="/admin/dashboard">
             <el-icon><DataAnalysis /></el-icon>
@@ -74,9 +82,11 @@ import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import {
+  Calendar,
   CaretBottom,
   Checked,
   DataAnalysis,
+  DocumentChecked,
   HomeFilled,
   OfficeBuilding,
   School,
@@ -130,8 +140,11 @@ async function handleLogout() {
 </script>
 
 <style scoped>
+/* 布局壳：锁定视口高度，只有内容区滚动，侧栏与顶栏固定 */
 .admin-layout {
-  min-height: 100vh;
+  --admin-aside-w: 216px;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .admin-header {
@@ -139,7 +152,8 @@ async function handleLogout() {
   align-items: center;
   justify-content: space-between;
   height: 56px;
-  padding: 0 24px;
+  flex-shrink: 0;
+  padding: 0 var(--space-xl);
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-color-light);
   position: sticky;
@@ -150,7 +164,7 @@ async function handleLogout() {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .logo-badge {
@@ -189,9 +203,9 @@ async function handleLogout() {
 .user-entry {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-md);
   transition: background-color 0.15s;
 }
@@ -220,37 +234,47 @@ async function handleLogout() {
 }
 
 .admin-body {
-  height: calc(100vh - 56px);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* 侧栏：飞书工作台式浅灰面板（选中项蓝底蓝字） */
+/* 侧栏：飞书工作台式浅灰面板（选中项蓝底蓝字），宽度由 --admin-aside-w 收口 */
 .admin-aside {
   background: var(--bg-page);
   border-right: 1px solid var(--border-color-light);
-  padding: 8px;
+  padding: var(--space-sm);
+  overflow-y: auto;
 }
 
+/* 菜单：尺寸与文字色统一走 Element Plus 菜单变量，页面只补选中态与悬浮态 */
 .admin-menu {
   border-right: none;
   background: transparent;
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: var(--text-regular);
+  --el-menu-active-color: var(--brand-primary);
+  --el-menu-hover-bg-color: var(--bg-fill);
+  --el-menu-item-height: 36px;
+  --el-menu-item-font-size: 14px;
 }
 .admin-menu .el-menu-item {
-  height: 36px;
-  line-height: 36px;
-  padding: 0 8px;
+  height: var(--el-menu-item-height);
+  line-height: var(--el-menu-item-height);
+  padding: 0 var(--space-sm);
   border-radius: var(--radius-md);
   margin-bottom: 2px;
-  font-size: 14px;
-  color: var(--text-regular);
+  font-size: var(--el-menu-item-font-size);
+  color: var(--el-menu-text-color);
   font-weight: 400;
 }
 .admin-menu .el-menu-item .el-icon {
   font-size: 16px;
-  color: var(--text-regular);
-  margin-right: 8px;
+  color: inherit;
+  margin-right: var(--space-sm);
 }
 .admin-menu .el-menu-item:hover {
-  background: rgba(31, 35, 41, 0.05);
+  background: var(--el-menu-hover-bg-color);
   color: var(--text-primary);
 }
 .admin-menu .el-menu-item:hover .el-icon {
@@ -258,16 +282,33 @@ async function handleLogout() {
 }
 .admin-menu .el-menu-item.is-active {
   background: var(--brand-primary-light);
-  color: var(--brand-primary);
+  color: var(--el-menu-active-color);
   font-weight: 500;
 }
 .admin-menu .el-menu-item.is-active .el-icon {
   color: var(--brand-primary);
 }
 
+/* 内容区：统一内边距，并且是布局壳内唯一的滚动容器 */
 .admin-main {
   background: var(--bg-page);
-  padding: 24px;
+  padding: var(--space-lg) var(--space-xl);
   overflow-y: auto;
+}
+
+/* 窄屏：侧栏收窄、顶栏与内容区内边距收紧（卡片 padding 由全局 1200/768 断点处理） */
+@media (max-width: 768px) {
+  .admin-layout {
+    --admin-aside-w: 176px;
+  }
+  .admin-header {
+    padding: 0 var(--space-md);
+  }
+  .admin-main {
+    padding: var(--space-md);
+  }
+  .admin-aside {
+    padding: var(--space-xs);
+  }
 }
 </style>

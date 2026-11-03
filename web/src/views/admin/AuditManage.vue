@@ -1,9 +1,11 @@
 <template>
-  <div class="audit-page">
+  <div class="audit-page page-container-wide">
     <!-- 页面标题栏 -->
     <div class="page-head">
-      <span class="page-title">预约审核</span>
-      <span class="page-tip">处理待审核预约申请与批量操作</span>
+      <div class="head-left">
+        <h2 class="page-title">预约审核</h2>
+        <span class="page-tip">处理待审核预约申请与批量操作</span>
+      </div>
     </div>
     <!-- 搜索栏：状态 / 日期范围 / 关键词 -->
     <el-card shadow="never" class="search-card">
@@ -67,7 +69,7 @@
 
       <el-table v-loading="loading" :data="records" stripe @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="46" />
-        <el-table-column prop="id" label="ID" width="60" />
+        <el-table-column prop="id" label="ID" width="60" align="right" />
         <el-table-column label="预约人" width="120">
           <template #default="{ row }">
             <div class="user-cell">
@@ -208,6 +210,7 @@ const records = ref([])
 const total = ref(0)
 const selectedIds = ref([])
 const dateRange = ref(null)
+let reqSeq = 0
 
 /* ===== AI 合规校验（R7：待审核记录「AI 校验」标签，违规红色高亮+悬浮原因，只提示不改状态）===== */
 /**
@@ -225,8 +228,8 @@ const complianceMap = ref(new Map())
 const checkingIds = ref(new Set())
 /** 页面加载时自动校验条数上限（M9 修复：此前对整页全部待审核记录并发发起请求，页长 50 时必然触发后端限流，多数请求失败且界面长期停在"校验中"） */
 const AUTO_CHECK_LIMIT = 5
-/** 自动校验并发上限（M9：小并发，避免一次性耗尽后端 RPM 额度） */
-const AUTO_CHECK_CONCURRENCY = 2
+/** 自动校验并发上限（M9：单并发逐条校验，避免抢占浏览器连接池把列表查询饿死） */
+const AUTO_CHECK_CONCURRENCY = 1
 
 /** 获取某条记录的 AI 校验结果 */
 function complianceInfo(row) {
@@ -317,6 +320,8 @@ async function autoComplianceCheck(list) {
   const workers = Array.from({ length: Math.min(AUTO_CHECK_CONCURRENCY, pending.length) }, async () => {
     while (idx < pending.length) {
       const r = pending[idx++]
+      // 微错峰：单并发逐条校验，避免一次性抢占浏览器连接池（同主机 HTTP/1.1 并发受限）把列表查询饿死
+      await new Promise((res) => setTimeout(res, 60))
       await checkSingle(r)
     }
   })
@@ -341,9 +346,10 @@ const rejectForm = reactive({ auditRemark: '' })
 /** 快捷驳回原因（需求文档 1.3 管理员端：预置常用驳回原因） */
 const quickReasons = ['时间冲突', '用途不明确', '教室维护', '人数超限']
 
-/** 加载预约列表 */
-async function loadData() {
+/** 加载预约列表（带请求序号 + 网络失败退避重试，AI 合规校验不得阻断业务查询，AGENTS 4.4） */
+async function loadData(retry = 0) {
   loading.value = true
+  const mySeq = ++reqSeq
   try {
     const params = {
       page: query.page,
@@ -356,6 +362,10 @@ async function loadData() {
       params.endDate = dateRange.value[1]
     }
     const res = await pageManageReservations(params)
+    // 已有更新的请求发出时丢弃本次过期响应，避免乱序到达覆盖最新结果
+    if (mySeq !== reqSeq) {
+      return
+    }
     records.value = res.data.records
     total.value = res.data.total
     // M9：翻页/刷新时清空校验缓存与进行中标记（防 complianceMap 只增不减的持续累积）
@@ -364,9 +374,17 @@ async function loadData() {
     // 当前页前 N 条待审核记录限量自动 AI 合规校验（只读，不阻断）
     autoComplianceCheck(records.value)
   } catch {
-    // 统一错误提示已由 request.js 处理
+    // 网络级失败（连接超时/重置）退避重试，避免瞬时抖动把业务列表拖垮停在旧数据
+    if (retry < 2 && mySeq === reqSeq) {
+      await new Promise((r) => setTimeout(r, 400 * (retry + 1)))
+      return loadData(retry + 1)
+    }
+    // 多次重试仍失败：保持当前表格内容，交由 request.js 全局提示，不抛错阻断页面
   } finally {
-    loading.value = false
+    // 仅当本次（含重试）仍为最新请求时才收尾 loading，乱序的旧请求不干扰新请求
+    if (mySeq === reqSeq) {
+      loading.value = false
+    }
   }
 }
 
@@ -479,18 +497,12 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+/* 限宽 + 页头/搜索/表格三段统一 12px 节奏 */
 .audit-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 4px;
-}
-
-.page-tip {
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--text-regular);
-}
-
-.search-card {
-  margin-bottom: 16px;
 }
 
 .toolbar {
@@ -501,6 +513,15 @@ onMounted(loadData)
 .room-cell {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+
+/* 长账号 / 长实验室名单行截断，避免把单元格撑成两行挤掉其它列 */
+.user-cell > span,
+.room-cell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-account,
@@ -559,5 +580,13 @@ onMounted(loadData)
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+/* 窄屏：批量操作按钮组整行堆叠，长按钮文案不再折成两行 */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

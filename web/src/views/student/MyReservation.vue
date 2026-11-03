@@ -1,8 +1,10 @@
 <template>
   <div class="my-reservation-page page-container">
     <div class="page-head">
-      <span class="page-title">我的预约</span>
-      <span class="page-tip">今日预约已置顶显示 · 待审核 / 已通过可取消</span>
+      <div class="head-left">
+        <span class="page-title">我的预约</span>
+        <span class="page-tip">今日预约已置顶显示 · 待审核 / 已通过可取消</span>
+      </div>
     </div>
     <el-card shadow="never" class="reserve-card">
       <!-- 状态分类查看 -->
@@ -154,14 +156,23 @@ function handleTabChange(name) {
   loadData()
 }
 
-/** 取消预约（二次确认 + 请求期间防重复点击） */
+/** 取消预约（二次确认 + 填写取消原因 + 请求期间防重复点击） */
 async function handleCancel(row) {
+  let reason = ''
   try {
-    await ElMessageBox.confirm(
-      `确定要取消「${row.classroomName}」${row.reserveDate} ${row.startTime}-${row.endTime} 的预约吗？取消后不可恢复。`,
+    const result = await ElMessageBox.prompt(
+      `确定要取消「${row.classroomName}」${row.reserveDate} ${row.startTime}-${row.endTime} 的预约吗？取消后不可恢复，请说明原因。`,
       '取消预约确认',
-      { confirmButtonText: '确定取消', cancelButtonText: '再想想', type: 'warning' }
+      {
+        confirmButtonText: '确定取消',
+        cancelButtonText: '再想想',
+        type: 'warning',
+        inputType: 'textarea',
+        inputPlaceholder: '例如：课程临时调整、身体不适、已改约其他时段',
+        inputValidator: (value) => (value && value.trim() ? true : '请填写取消原因')
+      }
     )
+    reason = result.value.trim()
   } catch {
     // 用户点了「再想想」
     return
@@ -171,7 +182,7 @@ async function handleCancel(row) {
   }
   cancelingId.value = row.id
   try {
-    await cancelReservation(row.id)
+    await cancelReservation(row.id, reason)
     ElMessage.success('取消成功')
     loadData()
   } catch {
@@ -190,17 +201,6 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.my-reservation-page {
-  max-width: 1080px;
-  margin: 0 auto;
-}
-
-.page-tip {
-  font-size: 14px;
-  line-height: 22px;
-  color: var(--text-regular);
-}
-
 .reserve-card {
   border-radius: var(--radius-lg);
 }
@@ -240,7 +240,7 @@ onMounted(loadData)
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: var(--space-md);
 }
 
 /* ---------- 窄屏适配（P3-8：<480px 分页换行，避免横向溢出） ---------- */

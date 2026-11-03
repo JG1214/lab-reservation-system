@@ -24,3 +24,11 @@ export function getTrend(params) {
 export function getTimeDistribution(params) {
   return request.get('/stats/time-distribution', { params })
 }
+
+/**
+ * 实际使用统计（V4.0 模块六）：按实验室聚合登记条数、正常/部分/失约分布、
+ * 实际使用人时与实际使用率，用于对比计划占用与实际使用
+ */
+export function getActualUsage(params) {
+  return request.get('/stats/actual-usage', { params })
+}

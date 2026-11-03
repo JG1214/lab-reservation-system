@@ -25,8 +25,9 @@
 
         <el-form ref="formRef" :model="form" :rules="rules" label-width="0" size="large" @keyup.enter="handleLogin">
           <el-form-item prop="role">
-            <el-radio-group v-model="form.role" class="role-group">
-              <el-radio-button :value="0">学 生</el-radio-button>
+            <el-radio-group v-model="form.role" class="role-group" aria-label="选择登录身份">
+              <el-radio-button :value="0">学生</el-radio-button>
+              <el-radio-button :value="2">教师</el-radio-button>
               <el-radio-button :value="1">管理员</el-radio-button>
             </el-radio-group>
           </el-form-item>
@@ -127,6 +128,7 @@ async function handleLogin() {
       !redirect.startsWith('/http')
     const target = isSafeRedirect ? redirect : user.role === 1 ? '/admin/home' : '/student/home'
     router.push(target)
+    // 学生与教师共用学生端布局，仅学生推送临期提醒（教师无预约提醒需求）
     if (user.role === 0) {
       checkUpcomingReminder()
     }
@@ -234,7 +236,7 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 24px;
+  padding: var(--space-xl) var(--space-lg);
 }
 .login-card {
   width: 400px;
@@ -242,8 +244,8 @@ async function handleLogin() {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color-light);
-  padding: 32px;
-  box-shadow: var(--shadow-raised);
+  padding: var(--space-xl);
+  box-shadow: none;
 }
 .login-title {
   font-size: 24px;
@@ -258,25 +260,44 @@ async function handleLogin() {
   color: var(--text-regular);
   margin-bottom: 24px;
 }
+/* 身份选择：三个等宽独立胶囊（间距 8px），选中填充品牌色；
+   不沿用 Element Plus 首尾相接的分段按钮，避免选中块与相邻块圆角/边框对不齐 */
 .role-group {
   display: flex;
+  gap: 8px;
   width: 100%;
 }
 .role-group .el-radio-button {
   flex: 1;
   text-align: center;
 }
-/* 按钮内文字 span 属 Element Plus 组件内部元素，须 :deep 穿透 scoped 才能命中 */
-.role-group :deep(.el-radio-button__inner) {
-  width: 100%;
-  border-radius: var(--radius-md) !important;
-  font-weight: 400;
-}
-.role-group .el-radio-button:first-child :deep(.el-radio-button__inner) {
-  border-radius: var(--radius-md) 0 0 var(--radius-md) !important;
-}
+/* 按钮内文字 span 属 Element Plus 组件内部元素，须 :deep 穿透 scoped 才能命中；
+   first/last-child 一并覆盖，压掉 EP 首尾相接的圆角与左边框规则 */
+.role-group .el-radio-button :deep(.el-radio-button__inner),
+.role-group .el-radio-button:first-child :deep(.el-radio-button__inner),
 .role-group .el-radio-button:last-child :deep(.el-radio-button__inner) {
-  border-radius: 0 var(--radius-md) var(--radius-md) 0 !important;
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-regular);
+  font-weight: 500;
+  box-shadow: none;
+  transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
+}
+.role-group .el-radio-button :deep(.el-radio-button__inner:hover) {
+  border-color: var(--brand-primary-border);
+  color: var(--brand-primary);
+}
+/* 选中态：EP 2.7 的规则是 `.is-active .el-radio-button__original-radio:not(:disabled)+.el-radio-button__inner`
+   （权重 0,5,0），这里必须把同样的结构多套一层 .role-group（0,6,0）才压得住它的背景/描边/阴影 */
+.role-group :deep(.el-radio-button.is-active .el-radio-button__original-radio:not(:disabled) + .el-radio-button__inner),
+.role-group :deep(.el-radio-button.is-active .el-radio-button__inner) {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: none;
 }
 .login-btn {
   width: 100%;
@@ -300,6 +321,16 @@ async function handleLogin() {
 @media (max-width: 900px) {
   .login-brand {
     display: none;
+  }
+}
+
+/* 平板 / 手机：面板与卡片内边距收到 16px 下限，375px 宽度下表单与身份切换仍不横向溢出 */
+@media (max-width: 768px) {
+  .login-panel {
+    padding: var(--space-lg);
+  }
+  .login-card {
+    padding: var(--space-lg);
   }
 }
 </style>

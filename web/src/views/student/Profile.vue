@@ -2,13 +2,13 @@
   <div class="profile-page page-container">
     <!-- 页面标题栏：时间感知问候（2025 趋势：个性化首屏） -->
     <div class="page-head">
-      <div>
-        <div class="page-title">{{ greeting }}，{{ displayName }}</div>
-        <div class="page-sub">管理身份资料、预约数据与账户安全</div>
+      <div class="head-left">
+        <span class="page-title">{{ greeting }}，{{ displayName }}</span>
+        <span class="page-tip">管理身份资料、预约数据与账户安全</span>
       </div>
     </div>
 
-    <!-- ① 身份卡 + ② 数据概览（个人名片：头像/姓名/学号 + 4 项预约统计） -->
+    <!-- ① 身份卡 + ② 数据概览（个人名片：头像/姓名/学号 + 5 项预约统计） -->
     <section class="identity-card">
       <div class="identity-row">
         <div class="identity-avatar-wrap">
@@ -17,7 +17,7 @@
         <div class="identity-main">
           <div class="identity-name-line">
             <span class="identity-name">{{ displayName }}</span>
-            <el-tag size="small" effect="plain" class="identity-role">学生</el-tag>
+            <el-tag size="small" effect="plain" class="identity-role">{{ roleLabel }}</el-tag>
           </div>
           <div class="identity-meta">学号 {{ studentNoText }} · 账号 {{ usernameText }}</div>
         </div>
@@ -39,6 +39,10 @@
         <div class="overview-item">
           <div class="overview-value">{{ stats.approvalRate ?? 0 }}%</div>
           <div class="overview-label">审核通过率</div>
+        </div>
+        <div class="overview-item">
+          <div class="overview-value">{{ stats.actualUseCount ?? 0 }}</div>
+          <div class="overview-label">实际使用次数</div>
         </div>
         <div class="overview-item">
           <div class="overview-value overview-value-sm">{{ lastReserveText }}</div>
@@ -369,6 +373,13 @@ const greeting = computed(() => {
 const displayName = computed(() => (userInfo.value && userInfo.value.name) || '未设置姓名')
 const studentNoText = computed(() => (userInfo.value && userInfo.value.studentNo) || '-')
 const usernameText = computed(() => (userInfo.value && userInfo.value.username) || '-')
+/** 身份标签：与登录角色一致（0-学生 / 1-实验室管理员 / 2-教师），不再写死「学生」 */
+const roleLabel = computed(() => {
+  if (!userInfo.value) return '学生'
+  if (userInfo.value.role === 1) return '实验室管理员'
+  if (userInfo.value.role === 2) return '教师'
+  return '学生'
+})
 const emailText = computed(() => (userInfo.value && userInfo.value.email) || '')
 const phoneText = computed(() => (userInfo.value && userInfo.value.phone) || '')
 
@@ -692,21 +703,13 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* ---- 页面标题栏 ---- */
-.page-sub {
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--text-regular);
-  margin-top: 4px;
-}
-
 /* ---- ① 身份卡（个人名片：浅色块 + 细边框，扁平无渐变） ---- */
 .identity-card {
   background: var(--brand-primary-lighter);
   border: 1px solid var(--border-color-light);
   border-radius: var(--radius-lg);
-  padding: 24px 24px 12px;
-  margin-bottom: 16px;
+  padding: var(--space-lg) var(--space-lg) var(--space-md);
+  margin-bottom: var(--space-md);
 }
 
 .identity-row {
@@ -743,7 +746,7 @@ onMounted(async () => {
 
 .identity-role {
   color: var(--brand-primary);
-  border-color: var(--el-color-primary-light-7);
+  border-color: var(--brand-primary-border);
   background: transparent;
 }
 
@@ -757,18 +760,18 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-/* ---- ② 数据概览条（身份卡下半区，分隔线 + 4 列） ---- */
+/* ---- ② 数据概览条（身份卡下半区，分隔线 + 5 列） ---- */
 .identity-divider {
   height: 1px;
   background: var(--border-color-light);
-  margin: 16px -24px 0;
+  margin: var(--space-lg) calc(var(--space-lg) * -1) 0;
 }
 
 .overview-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  padding: 16px 0 12px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-lg);
+  padding: var(--space-lg) 0 var(--space-md);
 }
 
 .overview-item {
@@ -803,7 +806,7 @@ onMounted(async () => {
 
 /* ---- 分区卡片通用 ---- */
 .section-card {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
   border-radius: var(--radius-lg);
   scroll-margin-top: 76px; /* 顶部 sticky 栏高度补偿，滚动定位不被遮挡 */
 }
@@ -847,7 +850,7 @@ onMounted(async () => {
   gap: 12px;
   border: 1px solid var(--border-color-light);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: var(--space-lg);
   cursor: pointer;
   background: var(--bg-card);
   transition: border-color 0.15s ease, background-color 0.15s ease;
@@ -903,7 +906,7 @@ onMounted(async () => {
   gap: 12px;
   border: 1px solid var(--border-color-light);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: var(--space-lg);
   cursor: pointer;
   background: var(--bg-card);
   transition: border-color 0.15s ease, background-color 0.15s ease;
@@ -1196,6 +1199,26 @@ onMounted(async () => {
 /* ---- 弹窗表单 ---- */
 .account-card :deep(.el-dialog) {
   border-radius: var(--radius-lg);
+}
+
+/* ---- 响应式：1024 以下指标 5 列→3 列、宫格 4 列→2 列，900 以下再降为 2 列 ---- */
+@media (max-width: 1024px) {
+  .overview-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .quick-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .identity-card {
+    padding: var(--space-md);
+  }
+
+  .quick-item,
+  .fav-item {
+    padding: var(--space-md);
+  }
 }
 
 /* ---- 响应式：窄屏降为单列 ---- */

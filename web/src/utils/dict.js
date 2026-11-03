@@ -54,3 +54,25 @@ export function statusTagType(status) {
   const hit = RES_STATUS.find((s) => String(s.value) === String(status))
   return hit ? hit.tag : 'info'
 }
+
+/* ========== 使用登记状态（usage_record.use_status） ========== */
+
+export const USE_STATUS = [
+  { value: 1, label: '正常使用', tag: 'success' },
+  { value: 2, label: '部分使用', tag: 'warning' },
+  { value: 3, label: '失约', tag: 'danger' }
+]
+
+/** 使用状态 → 文案；未登记（null/undefined）返回「未登记」，未知值兜底 '未知' */
+export function useStatusText(useStatus) {
+  if (useStatus === null || useStatus === undefined || useStatus === '') return '未登记'
+  const hit = USE_STATUS.find((s) => String(s.value) === String(useStatus))
+  return hit ? hit.label : '未知'
+}
+
+/** 使用状态 → Element Plus tag 类型；未登记返回 'info' */
+export function useStatusTagType(useStatus) {
+  if (useStatus === null || useStatus === undefined || useStatus === '') return 'info'
+  const hit = USE_STATUS.find((s) => String(s.value) === String(useStatus))
+  return hit ? hit.tag : 'info'
+}

@@ -1,5 +1,5 @@
 <template>
-  <div class="welcome-wrap">
+  <div class="page-container">
     <!-- 欢迎横幅（扁平深蓝面板，无渐变/光晕） -->
     <div class="welcome-banner">
       <div class="banner-info">
@@ -16,7 +16,7 @@
       </div>
     </div>
 
-    <!-- 核心数据概览（需求文档 1.3 管理员端第 8 页：今日预约 / 待审核 / 教室总数 / 用户总数） -->
+    <!-- 核心数据概览（需求文档 V4.0：今日预约 / 待审核 / 待登记使用 / 今日实到 / 教室总数 / 用户总数） -->
     <div class="stat-grid">
       <div class="stat-item">
         <div class="stat-value">{{ overview.todayReservationCount ?? 0 }}</div>
@@ -25,6 +25,14 @@
       <div class="stat-item">
         <div class="stat-value">{{ overview.pendingAuditCount ?? 0 }}</div>
         <div class="stat-label">待审核</div>
+      </div>
+      <div class="stat-item" v-clickable @click="go('/admin/usage')">
+        <div class="stat-value">{{ overview.pendingUsageCount ?? 0 }}</div>
+        <div class="stat-label">待登记使用</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">{{ overview.todayActualPeople ?? 0 }}</div>
+        <div class="stat-label">今日实到人数</div>
       </div>
       <div class="stat-item">
         <div class="stat-value">{{ overview.classroomCount ?? 0 }}</div>
@@ -66,6 +74,20 @@
           <span class="quick-desc">查询全量预约与导出</span>
         </div>
       </div>
+      <div class="quick-card" v-clickable @click="go('/admin/usage')">
+        <div class="quick-icon"><el-icon :size="22"><DocumentChecked /></el-icon></div>
+        <div class="quick-info">
+          <span class="quick-name">使用记录</span>
+          <span class="quick-desc">登记实际使用与失约</span>
+        </div>
+      </div>
+      <div class="quick-card" v-clickable @click="go('/admin/slots')">
+        <div class="quick-icon"><el-icon :size="22"><Clock /></el-icon></div>
+        <div class="quick-info">
+          <span class="quick-name">开放时段</span>
+          <span class="quick-desc">配置可预约日期与人数上限</span>
+        </div>
+      </div>
       <div class="quick-card" v-clickable @click="go('/admin/dashboard')">
         <div class="quick-icon"><el-icon :size="22"><DataAnalysis /></el-icon></div>
         <div class="quick-info">
@@ -97,7 +119,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Checked, DataAnalysis, School, Tickets, User } from '@element-plus/icons-vue'
+import { Checked, Clock, DataAnalysis, DocumentChecked, School, Tickets, User } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getOverview } from '@/api/stats'
 
@@ -129,29 +151,26 @@ function go(path) {
 </script>
 
 <style scoped>
-.welcome-wrap {
-  max-width: 1080px;
-  margin: 0 auto;
-}
+/* 页面限宽由全局 .page-container 提供，此处只保留卡片间距 */
 
 /* 欢迎横幅（品牌蓝实底，1px 内描边替代投影） */
 .welcome-banner {
   background: var(--brand-primary);
   border-radius: var(--radius-lg);
-  padding: 24px 32px;
+  padding: var(--space-xl);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-md);
   flex-wrap: wrap;
 }
 .banner-title {
   font-size: 20px;
   font-weight: 600;
   line-height: 28px;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 .banner-tip {
   font-size: 12px;
@@ -161,13 +180,13 @@ function go(path) {
 }
 .banner-badge {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 .badge-chip {
   font-size: 12px;
   line-height: 20px;
-  padding: 4px 12px;
+  padding: var(--space-xs) var(--space-md);
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -185,19 +204,25 @@ function go(path) {
   background: rgba(192, 42, 38, 0.92);
 }
 
-/* 核心数据概览（白底 + 1px 描边，无投影） */
+/* 核心数据概览：栅格规格统一由全局 .stat-grid 提供（auto-fit / minmax(200px, 1fr) / gap 12px） */
 .stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
 }
 
 .stat-item {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color-light);
-  padding: 16px;
+  padding: var(--space-lg);
+}
+/* 可点击的概览项（待登记使用 → 使用记录页） */
+.stat-item[v-clickable] {
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.stat-item[v-clickable]:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-color);
 }
 
 .stat-value {
@@ -212,25 +237,25 @@ function go(path) {
   font-size: 12px;
   line-height: 20px;
   color: var(--text-regular);
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 
 /* 快捷入口 */
 .quick-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
 }
 
 .quick-card {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color-light);
-  padding: 16px;
+  padding: var(--space-lg);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
@@ -261,7 +286,7 @@ function go(path) {
   font-weight: 500;
   color: var(--text-primary);
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 .quick-desc {
   font-size: 12px;
@@ -278,7 +303,7 @@ function go(path) {
   line-height: 22px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
 }
 .info-table :deep(.el-descriptions__label) {
   font-weight: 500;
