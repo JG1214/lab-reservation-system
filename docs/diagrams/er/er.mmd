@@ -1,0 +1,81 @@
+erDiagram
+    sys_user {
+        BIGINT id PK "主键ID"
+        VARCHAR username UK "登录账号"
+        VARCHAR password "密码（BCrypt）"
+        VARCHAR name "真实姓名"
+        VARCHAR student_no "学号"
+        VARCHAR phone "联系电话"
+        TINYINT role "0学生 1实验室管理员 2教师"
+        TINYINT status "0禁用 1正常"
+    }
+    classroom {
+        BIGINT id PK "主键ID"
+        VARCHAR name "教室名称"
+        VARCHAR building "所属楼栋"
+        VARCHAR room_no "教室编号"
+        TINYINT type "1普通教室 2实验室 3机房"
+        INT capacity "容纳人数"
+        VARCHAR open_requirement "开放要求"
+        TINYINT status "0停用 1可用"
+    }
+    reservation {
+        BIGINT id PK "主键ID"
+        BIGINT user_id FK "预约用户ID"
+        BIGINT classroom_id FK "预约教室ID"
+        DATE reserve_date "预约日期"
+        TIME start_time "开始时间"
+        TIME end_time "结束时间"
+        INT people_count "使用人数"
+        VARCHAR purpose "预约用途"
+        TINYINT status "0待审核 1已通过 2已驳回 3已取消"
+        BIGINT auditor_id FK "审核人ID"
+        DATETIME audit_time "审核时间"
+    }
+    lab_open_slot {
+        BIGINT id PK "主键ID"
+        BIGINT classroom_id FK "实验室ID"
+        DATE start_date "开放起始日期"
+        DATE end_date "开放结束日期"
+        VARCHAR week_days "开放星期 1-7 逗号分隔"
+        TIME open_time "开放开始时间"
+        TIME close_time "开放结束时间"
+        INT slot_capacity "时段人数上限"
+        TINYINT status "0停用 1启用"
+    }
+    user_favorite {
+        BIGINT id PK "主键ID"
+        BIGINT user_id FK "用户ID"
+        BIGINT classroom_id FK "教室ID"
+        DATETIME create_time "收藏时间"
+    }
+    usage_record {
+        BIGINT id PK "主键ID"
+        BIGINT reservation_id FK "预约ID（唯一）"
+        BIGINT classroom_id FK "实验室ID（冗余）"
+        BIGINT user_id FK "预约用户ID（冗余）"
+        DATE use_date "使用日期"
+        INT actual_people "实际使用人数"
+        TINYINT use_status "1正常 2部分使用 3失约"
+        BIGINT registrar_id FK "登记人ID（管理员）"
+        DATETIME check_time "登记时间"
+    }
+    ai_config {
+        BIGINT id PK "主键ID"
+        VARCHAR config_key UK "配置键"
+        TEXT config_value "配置值"
+        VARCHAR description "配置说明"
+        DATETIME update_time "更新时间"
+    }
+
+    sys_user ||--o{ reservation : "发起预约"
+    sys_user |o--o{ reservation : "审核预约"
+    classroom ||--o{ reservation : "被预约"
+    classroom ||--o{ lab_open_slot : "配置开放时段"
+    sys_user ||--o{ user_favorite : "收藏"
+    classroom ||--o{ user_favorite : "被收藏"
+    reservation ||--o| usage_record : "使用登记"
+    classroom ||--o{ usage_record : "按实验室统计"
+    sys_user ||--o{ usage_record : "使用人"
+    sys_user ||--o{ usage_record : "登记人"
+    lab_open_slot }o..o{ reservation : "时段约束（无外键列）"

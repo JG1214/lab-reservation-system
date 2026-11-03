@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "507c6209-7632-4595-a5fd-ca5eae71c7f7",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "D:\\毕设\\lab\\docs\\diagrams\\usecase\\usecase.candidate.json",
+  "output": "D:\\毕设\\lab\\docs\\diagrams\\usecase\\usecase.html",
+  "specification": {
+    "sha256": "ac95aaa6cccae66b519d4730fdde725f0b5b934e4071eabfc442555560b816d0",
+    "bytes": 15651
+  },
+  "artifact": {
+    "sha256": "0db181e0d9a04cbe26c55a9845360ba42fe9e231c0ebd60c437a0f57d9527c62",
+    "bytes": 792647
+  }
+}

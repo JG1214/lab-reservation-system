@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "4752d0b3-1a41-419b-8938-eeaf0efb126a",
+  "status": "current",
+  "command": "deliver",
+  "type": "sequence",
+  "input": "D:\\毕设\\lab\\docs\\diagrams\\sequence-audit\\sequence-audit.json",
+  "output": "D:\\毕设\\lab\\docs\\diagrams\\sequence-audit\\sequence-audit.html",
+  "specification": {
+    "sha256": "cac2d633c1ea6fb7553e6acbd180c4299ebb4ce7651b67b04885679c4bad7007",
+    "bytes": 9730
+  },
+  "artifact": {
+    "sha256": "1594b75c588aeda793e1fcc8f3bcba1a2a1d0d6a721f49eefa818d20c489afb6",
+    "bytes": 772877
+  }
+}

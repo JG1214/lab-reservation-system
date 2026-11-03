@@ -1,0 +1,345 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "取消预约时序",
+    "subtitle": "校验归属与状态 → 置为已取消并留痕 → 返回结果与失败分支",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/sequence-cancel/sequence-cancel.html",
+    "viewBox": [
+      1520,
+      960
+    ],
+    "column_fit": "spread",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Alexander-cloud123/lab-reservation-system",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "99a731e22cf892aa4f000c82946bcc322d73191a"
+    }
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "浏览器",
+      "sources": [
+        {
+          "path": "web/src/views/student/MyReservation.vue",
+          "line": 159,
+          "end_line": 193,
+          "label": "取消预约入口"
+        }
+      ]
+    },
+    {
+      "id": "axios",
+      "type": "frontend",
+      "label": "Axios 封装",
+      "sources": [
+        {
+          "path": "web/src/utils/request.js",
+          "line": 17,
+          "end_line": 26,
+          "label": "请求拦截注入 Token"
+        }
+      ]
+    },
+    {
+      "id": "ctrl",
+      "type": "backend",
+      "label": "预约控制器",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ReservationController.java",
+          "line": 84,
+          "end_line": 92,
+          "label": "取消预约接口"
+        }
+      ]
+    },
+    {
+      "id": "svc",
+      "type": "backend",
+      "label": "预约服务",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/ReservationServiceImpl.java",
+          "line": 335,
+          "end_line": 385,
+          "label": "cancelReservation 校验与更新"
+        }
+      ]
+    },
+    {
+      "id": "userctx",
+      "type": "security",
+      "label": "用户上下文",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/common/UserContext.java",
+          "line": 27,
+          "end_line": 30,
+          "label": "getUserId 读取登录用户"
+        }
+      ]
+    },
+    {
+      "id": "mapper",
+      "type": "backend",
+      "label": "预约 Mapper",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/mapper/ReservationMapper.java",
+          "line": 13,
+          "label": "BaseMapper 数据访问"
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "MySQL",
+      "sources": [
+        {
+          "path": "database/init_db.sql",
+          "line": 57,
+          "end_line": 80,
+          "label": "reservation 建表语句"
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "from": 176,
+      "to": 422,
+      "label": "① 校验归属与状态"
+    },
+    {
+      "from": 428,
+      "to": 646,
+      "label": "② 置为已取消并留痕"
+    },
+    {
+      "from": 652,
+      "to": 774,
+      "label": "③ 失败分支"
+    }
+  ],
+  "messages": [
+    {
+      "id": "click-cancel",
+      "from": "browser",
+      "to": "axios",
+      "y": 160,
+      "label": "点击「取消」并填写取消原因"
+    },
+    {
+      "id": "put-cancel",
+      "from": "axios",
+      "to": "ctrl",
+      "y": 192,
+      "label": "PUT /api/reservation/{id}/cancel（Bearer Token）",
+      "variant": "security"
+    },
+    {
+      "id": "call-service",
+      "from": "ctrl",
+      "to": "svc",
+      "y": 224,
+      "label": "cancelReservation(id, reason)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "read-user",
+      "from": "svc",
+      "to": "userctx",
+      "y": 256,
+      "label": "getUserId()：当前登录用户"
+    },
+    {
+      "id": "user-id",
+      "from": "userctx",
+      "to": "svc",
+      "y": 288,
+      "label": "userId",
+      "variant": "return"
+    },
+    {
+      "id": "select-one",
+      "from": "svc",
+      "to": "mapper",
+      "y": 320,
+      "label": "selectById：查询预约记录"
+    },
+    {
+      "id": "select-sql",
+      "from": "mapper",
+      "to": "db",
+      "y": 352,
+      "label": "SELECT * FROM reservation WHERE id = ?"
+    },
+    {
+      "id": "select-row",
+      "from": "db",
+      "to": "mapper",
+      "y": 384,
+      "label": "预约记录",
+      "variant": "return"
+    },
+    {
+      "id": "reservation-obj",
+      "from": "mapper",
+      "to": "svc",
+      "y": 416,
+      "label": "Reservation（userId / status / reserveDate）",
+      "variant": "return"
+    },
+    {
+      "id": "update-status",
+      "from": "svc",
+      "to": "mapper",
+      "y": 448,
+      "label": "条件更新：status = 3，写入 cancel_reason / cancel_time",
+      "variant": "emphasis",
+      "note": "仅 0 待审核 / 1 已通过 可取消；已驳回、已取消不可再取消"
+    },
+    {
+      "id": "update-sql",
+      "from": "mapper",
+      "to": "db",
+      "y": 480,
+      "label": "UPDATE reservation SET status = 3 … WHERE status IN (0, 1)"
+    },
+    {
+      "id": "update-count",
+      "from": "db",
+      "to": "mapper",
+      "y": 512,
+      "label": "影响行数 = 1",
+      "variant": "return"
+    },
+    {
+      "id": "updated",
+      "from": "mapper",
+      "to": "svc",
+      "y": 544,
+      "label": "updated = 1",
+      "variant": "return"
+    },
+    {
+      "id": "delete-usage",
+      "from": "svc",
+      "to": "mapper",
+      "y": 576,
+      "label": "级联删除该预约的 usage_record",
+      "variant": "dashed"
+    },
+    {
+      "id": "cancel-ok",
+      "from": "ctrl",
+      "to": "axios",
+      "y": 608,
+      "label": "Result：取消成功",
+      "variant": "return"
+    },
+    {
+      "id": "toast-ok",
+      "from": "axios",
+      "to": "browser",
+      "y": 640,
+      "label": "提示「取消成功」",
+      "variant": "return"
+    },
+    {
+      "id": "err-status",
+      "from": "svc",
+      "to": "axios",
+      "y": 672,
+      "label": "400「当前状态不可取消」：已驳回 / 已取消",
+      "variant": "dashed"
+    },
+    {
+      "id": "err-owner",
+      "from": "svc",
+      "to": "axios",
+      "y": 704,
+      "label": "400「只能取消自己的预约」",
+      "variant": "dashed"
+    },
+    {
+      "id": "err-deadline",
+      "from": "svc",
+      "to": "axios",
+      "y": 736,
+      "label": "400「预约开始前 1 小时内禁止取消，如需调整请联系管理员」",
+      "variant": "dashed"
+    },
+    {
+      "id": "err-toast",
+      "from": "axios",
+      "to": "browser",
+      "y": 768,
+      "label": "ElMessage.error 展示失败原因",
+      "variant": "dashed"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "browser",
+      "from": 158,
+      "to": 774,
+      "type": "external"
+    },
+    {
+      "participant": "axios",
+      "from": 160,
+      "to": 770,
+      "type": "frontend"
+    },
+    {
+      "participant": "ctrl",
+      "from": 218,
+      "to": 614,
+      "type": "backend"
+    },
+    {
+      "participant": "svc",
+      "from": 250,
+      "to": 742,
+      "type": "backend"
+    },
+    {
+      "participant": "userctx",
+      "from": 252,
+      "to": 292,
+      "type": "security"
+    },
+    {
+      "participant": "mapper",
+      "from": 316,
+      "to": 420,
+      "type": "backend"
+    },
+    {
+      "participant": "mapper",
+      "from": 444,
+      "to": 580,
+      "type": "backend"
+    },
+    {
+      "participant": "db",
+      "from": 348,
+      "to": 388,
+      "type": "database"
+    },
+    {
+      "participant": "db",
+      "from": 476,
+      "to": 516,
+      "type": "database"
+    }
+  ]
+}

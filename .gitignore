@@ -74,3 +74,6 @@ vite-dev.log
 web/debug-*.mjs
 web/debug-*.json
 
+# archify generated evidence (large, non-deliverable)
+docs/diagrams/**/*.finalize.json
+docs/diagrams/**/*.browser-check.json

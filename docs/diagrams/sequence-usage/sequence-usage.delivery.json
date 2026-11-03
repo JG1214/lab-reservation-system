@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "160ece94-c440-4812-be9c-65ceeff7b24a",
+  "status": "current",
+  "command": "deliver",
+  "type": "sequence",
+  "input": "D:\\毕设\\lab\\docs\\diagrams\\sequence-usage\\sequence-usage.json",
+  "output": "D:\\毕设\\lab\\docs\\diagrams\\sequence-usage\\sequence-usage.html",
+  "specification": {
+    "sha256": "89d817f17021230c9d5faccf4c5e9fc2b1b13588008efe2af7da6f6d1629efe9",
+    "bytes": 10280
+  },
+  "artifact": {
+    "sha256": "436917ae18cf2209755b3a1ec0fcdb461a6a5893b9f1578fae63b6ec2b018a82",
+    "bytes": 775225
+  }
+}

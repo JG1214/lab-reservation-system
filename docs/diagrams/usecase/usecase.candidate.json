@@ -1,0 +1,694 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "实验室/教室预约管理系统 V4.0 · 用例图",
+    "subtitle": "四类参与者 · 17 个业务用例 + 1 个包含用例（学生端 / 管理端）",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/usecase/usecase.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Alexander-cloud123/lab-reservation-system",
+      "provider": "github",
+      "revision": "99a731e22cf892aa4f000c82946bcc322d73191a"
+    },
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "参与者"
+        },
+        "backend": {
+          "label": "系统用例"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "student",
+      "type": "external",
+      "icon": "person",
+      "label": "学生",
+      "sublabel": "role=0 · 学生端",
+      "pos": [
+        60,
+        260
+      ],
+      "size": [
+        140,
+        180
+      ],
+      "sources": [
+        {
+          "path": "web/src/router/index.js",
+          "line": 28,
+          "end_line": 32,
+          "label": "学生端路由 roles [0,2]"
+        }
+      ]
+    },
+    {
+      "id": "teacher",
+      "type": "external",
+      "icon": "person",
+      "label": "教师",
+      "sublabel": "role=2 · 共用学生端",
+      "pos": [
+        60,
+        700
+      ],
+      "size": [
+        140,
+        90
+      ],
+      "sources": [
+        {
+          "path": "web/src/router/index.js",
+          "line": 28,
+          "end_line": 32,
+          "label": "教师与学生共用 /student"
+        }
+      ]
+    },
+    {
+      "id": "labAdmin",
+      "type": "external",
+      "icon": "person",
+      "label": "实验室管理员",
+      "sublabel": "role=1 · 管理端",
+      "pos": [
+        1180,
+        150
+      ],
+      "size": [
+        150,
+        180
+      ],
+      "sources": [
+        {
+          "path": "web/src/router/index.js",
+          "line": 75,
+          "end_line": 78,
+          "label": "管理端路由 roles [1]"
+        }
+      ]
+    },
+    {
+      "id": "sysAdmin",
+      "type": "external",
+      "icon": "person",
+      "label": "系统管理员",
+      "sublabel": "role=1 · 内置 admin",
+      "pos": [
+        1180,
+        470
+      ],
+      "size": [
+        150,
+        140
+      ],
+      "sources": [
+        {
+          "path": "database/init_db.sql",
+          "line": 166,
+          "label": "内置管理员账号 admin"
+        },
+        {
+          "path": "web/src/router/index.js",
+          "line": 75,
+          "end_line": 78
+        }
+      ]
+    },
+    {
+      "id": "ucAuth",
+      "type": "backend",
+      "label": "登录注册",
+      "sublabel": "/api/user/login · /register",
+      "pos": [
+        300,
+        40
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/UserController.java",
+          "line": 45,
+          "end_line": 65,
+          "label": "登录 / 注册接口"
+        }
+      ]
+    },
+    {
+      "id": "ucBrowse",
+      "type": "backend",
+      "label": "浏览实验室列表与详情",
+      "sublabel": "/api/classroom/list · /{id}",
+      "pos": [
+        300,
+        116
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ClassroomStudentController.java",
+          "line": 36,
+          "end_line": 50,
+          "label": "列表 / 详情（含今日剩余人数）"
+        }
+      ]
+    },
+    {
+      "id": "ucSubmit",
+      "type": "backend",
+      "label": "提交预约（时段冲突与容量校验）",
+      "sublabel": "/api/reservation · /conflict",
+      "pos": [
+        300,
+        192
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ReservationController.java",
+          "line": 55,
+          "end_line": 67,
+          "label": "实时冲突校验 + 创建预约"
+        }
+      ]
+    },
+    {
+      "id": "ucMine",
+      "type": "backend",
+      "label": "我的预约与取消",
+      "sublabel": "/api/reservation/mine · /cancel",
+      "pos": [
+        300,
+        268
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ReservationController.java",
+          "line": 77,
+          "end_line": 88,
+          "label": "我的预约 / 取消预约"
+        }
+      ]
+    },
+    {
+      "id": "ucCalendar",
+      "type": "backend",
+      "label": "预约日历总览",
+      "sublabel": "/api/reservation/calendar",
+      "pos": [
+        300,
+        344
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ReservationController.java",
+          "line": 162,
+          "label": "日历总览接口"
+        }
+      ]
+    },
+    {
+      "id": "ucFavorite",
+      "type": "backend",
+      "label": "收藏实验室",
+      "sublabel": "/api/favorite（toggle，上限 10 间）",
+      "pos": [
+        300,
+        420
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/FavoriteController.java",
+          "line": 36,
+          "end_line": 46,
+          "label": "收藏 / 取消收藏 toggle"
+        }
+      ]
+    },
+    {
+      "id": "ucProfile",
+      "type": "backend",
+      "label": "个人中心",
+      "sublabel": "/api/user/info · /password",
+      "pos": [
+        300,
+        496
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/UserController.java",
+          "line": 75,
+          "end_line": 106,
+          "label": "个人信息 / 修改密码"
+        }
+      ]
+    },
+    {
+      "id": "ucAi",
+      "type": "backend",
+      "label": "AI 智能助手（推荐 / 解析 / 问答）",
+      "sublabel": "/api/ai/recommend · parse-reservation · chat",
+      "pos": [
+        300,
+        572
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/ai/controller/AiController.java",
+          "line": 74,
+          "end_line": 136,
+          "label": "推荐 / 自然语言解析 / 问答"
+        }
+      ]
+    },
+    {
+      "id": "ucOccupancy",
+      "type": "backend",
+      "label": "实验室占用总览",
+      "sublabel": "/student/occupancy（教师侧边栏）",
+      "pos": [
+        300,
+        672
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "web/src/router/index.js",
+          "line": 66,
+          "end_line": 70,
+          "label": "教师专属入口"
+        }
+      ]
+    },
+    {
+      "id": "ucSlot",
+      "type": "backend",
+      "label": "开放时段维护",
+      "sublabel": "/api/slot（含批量）",
+      "pos": [
+        880,
+        40
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/LabOpenSlotController.java",
+          "line": 43,
+          "end_line": 71,
+          "label": "时段增删改 / 批量"
+        }
+      ]
+    },
+    {
+      "id": "ucClassroom",
+      "type": "backend",
+      "label": "实验室资源维护",
+      "sublabel": "/api/classroom/manage",
+      "pos": [
+        880,
+        116
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ClassroomController.java",
+          "line": 41,
+          "end_line": 95,
+          "label": "增删改 / 状态 / 批量状态"
+        }
+      ]
+    },
+    {
+      "id": "ucAudit",
+      "type": "backend",
+      "label": "预约审核（单个 / 批量）",
+      "sublabel": "/api/reservation/{id}/audit",
+      "pos": [
+        880,
+        192
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ReservationController.java",
+          "line": 142,
+          "end_line": 152,
+          "label": "审核 / 批量审核"
+        }
+      ]
+    },
+    {
+      "id": "ucUsage",
+      "type": "backend",
+      "label": "使用登记（正常 / 部分 / 失约）",
+      "sublabel": "/api/usage · /batch-noshow",
+      "pos": [
+        880,
+        268
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/UsageRecordController.java",
+          "line": 41,
+          "end_line": 54,
+          "label": "登记 / 批量失约"
+        }
+      ]
+    },
+    {
+      "id": "ucRecord",
+      "type": "backend",
+      "label": "预约记录查询与导出",
+      "sublabel": "/api/reservation/manage · /export",
+      "pos": [
+        880,
+        344
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ReservationController.java",
+          "line": 99,
+          "end_line": 117,
+          "label": "查询 / Excel 导出"
+        }
+      ]
+    },
+    {
+      "id": "ucUser",
+      "type": "backend",
+      "label": "用户管理（含角色变更）",
+      "sublabel": "/api/user/manage",
+      "pos": [
+        880,
+        452
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/UserController.java",
+          "line": 117,
+          "end_line": 161,
+          "label": "增删改 / 重置密码 / 改角色"
+        }
+      ]
+    },
+    {
+      "id": "ucDashboard",
+      "type": "backend",
+      "label": "数据看板",
+      "sublabel": "/api/stats/overview · usage-rate",
+      "pos": [
+        880,
+        528
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/StatsController.java",
+          "line": 40,
+          "end_line": 80,
+          "label": "使用率 / 趋势 / 时段分布"
+        }
+      ]
+    },
+    {
+      "id": "ucAiConfig",
+      "type": "backend",
+      "label": "AI 功能启停",
+      "sublabel": "ai.enable AND ai_config.ai_enable",
+      "pos": [
+        880,
+        604
+      ],
+      "size": [
+        250,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/ai/service/AiConfigService.java",
+          "line": 71,
+          "end_line": 81,
+          "label": "双开关判定"
+        }
+      ]
+    },
+    {
+      "id": "ucVerify",
+      "type": "backend",
+      "label": "时段冲突与容量校验",
+      "sublabel": "新开始<旧结束 AND 新结束>旧开始",
+      "pos": [
+        615,
+        186
+      ],
+      "size": [
+        210,
+        66
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/ReservationServiceImpl.java",
+          "line": 95,
+          "end_line": 116,
+          "label": "冲突检测 + 开放时段/容量"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "实验室/教室预约管理系统 V4.0",
+      "wraps": [
+        "ucAuth",
+        "ucBrowse",
+        "ucSubmit",
+        "ucMine",
+        "ucCalendar",
+        "ucFavorite",
+        "ucProfile",
+        "ucAi",
+        "ucOccupancy",
+        "ucSlot",
+        "ucClassroom",
+        "ucAudit",
+        "ucUsage",
+        "ucRecord",
+        "ucUser",
+        "ucDashboard",
+        "ucAiConfig",
+        "ucVerify"
+      ],
+      "pad": 26
+    }
+  ],
+  "connections": [
+    {
+      "id": "c-stu-auth",
+      "from": "student",
+      "to": "ucAuth"
+    },
+    {
+      "id": "c-stu-browse",
+      "from": "student",
+      "to": "ucBrowse"
+    },
+    {
+      "id": "c-stu-submit",
+      "from": "student",
+      "to": "ucSubmit"
+    },
+    {
+      "id": "c-stu-mine",
+      "from": "student",
+      "to": "ucMine"
+    },
+    {
+      "id": "c-stu-calendar",
+      "from": "student",
+      "to": "ucCalendar"
+    },
+    {
+      "id": "c-stu-fav",
+      "from": "student",
+      "to": "ucFavorite"
+    },
+    {
+      "id": "c-stu-profile",
+      "from": "student",
+      "to": "ucProfile"
+    },
+    {
+      "id": "c-stu-ai",
+      "from": "student",
+      "to": "ucAi"
+    },
+    {
+      "id": "c-teach-general",
+      "from": "teacher",
+      "to": "student",
+      "label": "泛化",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "c-teach-occupancy",
+      "from": "teacher",
+      "to": "ucOccupancy",
+      "label": "教师专属入口"
+    },
+    {
+      "id": "c-submit-verify",
+      "from": "ucSubmit",
+      "to": "ucVerify",
+      "label": "包含",
+      "variant": "dashed"
+    },
+    {
+      "id": "c-lab-slot",
+      "from": "labAdmin",
+      "to": "ucSlot"
+    },
+    {
+      "id": "c-lab-classroom",
+      "from": "labAdmin",
+      "to": "ucClassroom"
+    },
+    {
+      "id": "c-lab-audit",
+      "from": "labAdmin",
+      "to": "ucAudit"
+    },
+    {
+      "id": "c-lab-usage",
+      "from": "labAdmin",
+      "to": "ucUsage"
+    },
+    {
+      "id": "c-lab-record",
+      "from": "labAdmin",
+      "to": "ucRecord"
+    },
+    {
+      "id": "c-sys-user",
+      "from": "sysAdmin",
+      "to": "ucUser"
+    },
+    {
+      "id": "c-sys-dashboard",
+      "from": "sysAdmin",
+      "to": "ucDashboard"
+    },
+    {
+      "id": "c-sys-ai",
+      "from": "sysAdmin",
+      "to": "ucAiConfig"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "参与者与角色",
+      "items": [
+        "学生 role=0 与教师 role=2 共用 /student 路由（学生端 6 页）",
+        "实验室管理员与系统管理员同为 role=1，共用 /admin 路由（管理端 8 页）",
+        "内置账号 admin 显示名为「系统管理员」；图中按职责划分，不改变权限口径"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "预约核心规则",
+      "items": [
+        "冲突检测公式：新开始 < 旧结束 AND 新结束 > 旧开始，仅与已通过(1)预约比较",
+        "预约必须完整落在 lab_open_slot 开放时段内，单时段人数不超过 slot_capacity",
+        "前端实时校验（/api/reservation/conflict）+ 后端二次校验"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "状态流转",
+      "items": [
+        "待审核(0) → 已通过(1) / 已驳回(2)；待审核或已通过 → 已取消(3)",
+        "审核仅限待审核记录，驳回必填审核备注"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "AI 能力边界",
+      "items": [
+        "agnes-3.0-flash（国内节点），超时 60s，失败降级本地规则模拟",
+        "双开关：application.yml ai.enable AND ai_config.ai_enable",
+        "AI 只读不写：推荐 / 解析结果由用户确认后手动提交"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "使用登记口径",
+      "items": [
+        "use_status：1 正常 / 2 部分使用（实际人数少于预约人数）/ 3 失约（实际人数为 0）"
+      ]
+    }
+  ]
+}

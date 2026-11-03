@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "f795d286-dc4b-4d39-8094-e0a0daf5bb28",
+  "status": "current",
+  "command": "deliver",
+  "type": "sequence",
+  "input": "D:\\毕设\\lab\\docs\\diagrams\\sequence-reserve-submit\\candidate.json",
+  "output": "D:\\毕设\\lab\\docs\\diagrams\\sequence-reserve-submit\\sequence-reserve-submit.html",
+  "specification": {
+    "sha256": "6bc3a27544661a254e91914c803031268d6b86058ba60a68fa2b71933b00e9bf",
+    "bytes": 9626
+  },
+  "artifact": {
+    "sha256": "1bee16faedb4d0f4a51f915651754b64f289cd25ae407cdf5b92defe7aff3825",
+    "bytes": 773705
+  }
+}

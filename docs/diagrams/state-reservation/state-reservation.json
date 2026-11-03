@@ -1,0 +1,207 @@
+{
+  "schema_version": 2,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "预约状态机：四态流转与使用登记",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/state-reservation/state-reservation.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Alexander-cloud123/lab-reservation-system",
+      "provider": "github",
+      "revision": "99a731e22cf892aa4f000c82946bcc322d73191a"
+    }
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "预约状态"
+    },
+    {
+      "id": "record",
+      "label": "使用登记记录"
+    },
+    {
+      "id": "terminal",
+      "label": "终态"
+    }
+  ],
+  "states": [
+    {
+      "id": "pending",
+      "type": "start",
+      "label": "待审核",
+      "sublabel": "status = 0",
+      "tag": "提交后初始态",
+      "lane": "main",
+      "col": 0,
+      "step": "01",
+      "width": 150,
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/ReservationServiceImpl.java",
+          "line": 311,
+          "label": "提交置待审核"
+        },
+        {
+          "path": "server/src/main/java/com/example/reservation/common/Constants.java",
+          "line": 31,
+          "end_line": 37,
+          "label": "状态常量"
+        }
+      ]
+    },
+    {
+      "id": "approved",
+      "type": "active",
+      "label": "已通过",
+      "sublabel": "status = 1",
+      "tag": "可登记使用",
+      "lane": "main",
+      "col": 1,
+      "step": "02",
+      "width": 150,
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/ReservationServiceImpl.java",
+          "line": 445,
+          "end_line": 479,
+          "label": "通过前复查冲突与容量"
+        }
+      ]
+    },
+    {
+      "id": "usage",
+      "type": "external",
+      "label": "使用登记记录",
+      "sublabel": "正常使用 / 部分使用 / 失约",
+      "tag": "use_status = 1/2/3",
+      "lane": "record",
+      "col": 2,
+      "width": 186,
+      "height": 74,
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/UsageRecordServiceImpl.java",
+          "line": 127,
+          "end_line": 133,
+          "label": "仅已通过可登记且只登记一次"
+        },
+        {
+          "path": "server/src/main/java/com/example/reservation/common/Constants.java",
+          "line": 53,
+          "end_line": 57,
+          "label": "使用结果常量"
+        }
+      ]
+    },
+    {
+      "id": "rejected",
+      "type": "failure",
+      "label": "已驳回",
+      "sublabel": "status = 2 · 终态不可逆",
+      "lane": "terminal",
+      "col": 0,
+      "width": 160,
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/ReservationServiceImpl.java",
+          "line": 441,
+          "end_line": 443,
+          "label": "驳回必填审核备注"
+        }
+      ]
+    },
+    {
+      "id": "canceled",
+      "type": "neutral",
+      "label": "已取消",
+      "sublabel": "status = 3 · 终态不可逆",
+      "lane": "terminal",
+      "col": 1,
+      "width": 160,
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/ReservationServiceImpl.java",
+          "line": 355,
+          "end_line": 379,
+          "label": "仅待审核/已通过可取消"
+        },
+        {
+          "path": "web/src/utils/dict.js",
+          "line": 40,
+          "end_line": 43,
+          "label": "状态字典"
+        }
+      ]
+    }
+  ],
+  "transitions": [
+    {
+      "from": "pending",
+      "to": "approved",
+      "label": "管理员通过 · 复查时段冲突与人数容量"
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "label": "驳回须填审核备注"
+    },
+    {
+      "from": "pending",
+      "to": "canceled",
+      "label": "仅本人 · 填原因 · 开始前1h外",
+      "variant": "dashed"
+    },
+    {
+      "from": "approved",
+      "to": "canceled",
+      "label": "仅本人 · 填原因 · 开始前1h外",
+      "variant": "dashed"
+    },
+    {
+      "from": "approved",
+      "to": "usage",
+      "label": "管理员登记使用结果 · 预约仍为已通过(1)",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "四态状态机",
+      "items": [
+        "reservation.status 只有 0/1/2/3 四个取值，对应 Constants.RES_STATUS_*",
+        "待审核(0) 是唯一入口，提交预约即写入该状态",
+        "已通过(1) 之后的使用结果记在 usage_record，不扩充预约状态"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "审核闸门（仅管理员）",
+      "items": [
+        "仅待审核(0)可审核，通过/驳回二选一",
+        "通过前在教室行 FOR UPDATE 锁内复查时段冲突与人数容量",
+        "驳回必须填写审核备注，通过不写备注"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "用户取消约束",
+      "items": [
+        "只能取消本人的预约，且仅待审核(0)/已通过(1)可取消",
+        "预约开始前 1 小时内禁止取消",
+        "必须填写取消原因并记录取消时间；已登记的使用记录级联删除"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "终态与并发保护",
+      "items": [
+        "已驳回(2)、已取消(3) 没有出边，不可再流转",
+        "状态写入均为条件更新（WHERE status = 期望值）+ 影响行数校验",
+        "并发下取消与审核互踩时，后写者不会覆盖先写结果"
+      ]
+    }
+  ]
+}

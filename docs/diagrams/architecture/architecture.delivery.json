@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "78c44d24-50be-45aa-9234-789b6458e65d",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "D:\\毕设\\lab\\docs\\diagrams\\architecture\\candidate.json",
+  "output": "D:\\毕设\\lab\\docs\\diagrams\\architecture\\architecture.html",
+  "specification": {
+    "sha256": "ef0b0f2c49bf80ee4ced8dfc957486ad44d1ed03a19c241ad6586d1b6938c0f7",
+    "bytes": 10602
+  },
+  "artifact": {
+    "sha256": "7dfa4d18e524195adc37c8495eceea6960a28dda2b7db7708d0a7f906eed7b03",
+    "bytes": 780188
+  }
+}

@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "提交预约时序",
+    "subtitle": "前端实时校验 → 提交 → 后端二次校验 → 写入待审核记录",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/sequence-reserve-submit/sequence-reserve-submit.html",
+    "column_fit": "spread",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Alexander-cloud123/lab-reservation-system",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "99a731e22cf892aa4f000c82946bcc322d73191a"
+    },
+    "viewBox": [
+      1680,
+      1080
+    ]
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "浏览器",
+      "sources": [
+        {
+          "path": "web/src/views/student/ClassroomDetail.vue",
+          "line": 554,
+          "end_line": 612,
+          "label": "提交预约入口"
+        }
+      ]
+    },
+    {
+      "id": "axios",
+      "type": "frontend",
+      "label": "Axios 封装",
+      "sources": [
+        {
+          "path": "web/src/utils/request.js",
+          "line": 11,
+          "end_line": 26,
+          "label": "请求拦截器注入 Token"
+        }
+      ]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "鉴权拦截器",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/common/AuthInterceptor.java",
+          "line": 44,
+          "end_line": 113,
+          "label": "JWT 校验与角色拦截"
+        }
+      ]
+    },
+    {
+      "id": "ctrl",
+      "type": "backend",
+      "label": "预约控制器",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ReservationController.java",
+          "line": 63,
+          "end_line": 71,
+          "label": "提交预约接口"
+        }
+      ]
+    },
+    {
+      "id": "svc",
+      "type": "backend",
+      "label": "预约服务",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/ReservationServiceImpl.java",
+          "line": 222,
+          "end_line": 316,
+          "label": "createReservation 二次校验"
+        }
+      ]
+    },
+    {
+      "id": "slot",
+      "type": "backend",
+      "label": "开放时段服务",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/LabOpenSlotServiceImpl.java",
+          "line": 185,
+          "end_line": 201,
+          "label": "requireEffectiveSlot 时段校验"
+        }
+      ]
+    },
+    {
+      "id": "mapper",
+      "type": "backend",
+      "label": "预约 Mapper",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/mapper/ReservationMapper.java",
+          "line": 13,
+          "label": "BaseMapper 数据访问"
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "MySQL",
+      "sources": [
+        {
+          "path": "database/init_db.sql",
+          "line": 57,
+          "end_line": 80,
+          "label": "reservation 建表语句"
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "from": 176,
+      "to": 518,
+      "label": "① 前端实时校验"
+    },
+    {
+      "from": 524,
+      "to": 902,
+      "label": "② 提交与后端二次校验"
+    },
+    {
+      "from": 908,
+      "to": 966,
+      "label": "③ 冲突失败分支"
+    }
+  ],
+  "messages": [
+    {
+      "id": "pick-slot",
+      "from": "browser",
+      "to": "axios",
+      "y": 160,
+      "label": "选择日期与时段，触发实时校验",
+      "variant": "default"
+    },
+    {
+      "id": "conflict-get",
+      "from": "axios",
+      "to": "auth",
+      "y": 192,
+      "label": "GET /api/reservation/conflict（Bearer Token）",
+      "variant": "security"
+    },
+    {
+      "id": "conflict-pass",
+      "from": "auth",
+      "to": "ctrl",
+      "y": 224,
+      "label": "JWT 有效，放行",
+      "variant": "security"
+    },
+    {
+      "id": "conflict-call",
+      "from": "ctrl",
+      "to": "svc",
+      "y": 256,
+      "label": "checkConflict(classroomId, date, startTime, endTime)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "slot-check",
+      "from": "svc",
+      "to": "slot",
+      "y": 288,
+      "label": "requireEffectiveSlot：须完整落在开放时段内",
+      "variant": "default"
+    },
+    {
+      "id": "slot-hit",
+      "from": "slot",
+      "to": "svc",
+      "y": 320,
+      "label": "命中的开放时段（含 slotCapacity）",
+      "variant": "return"
+    },
+    {
+      "id": "approved-query",
+      "from": "svc",
+      "to": "mapper",
+      "y": 352,
+      "label": "查询当日已通过预约（status = 1）",
+      "variant": "default"
+    },
+    {
+      "id": "approved-select",
+      "from": "mapper",
+      "to": "db",
+      "y": 384,
+      "label": "SELECT … WHERE status = 1",
+      "variant": "default"
+    },
+    {
+      "id": "approved-rows",
+      "from": "db",
+      "to": "mapper",
+      "y": 416,
+      "label": "已通过预约结果集",
+      "variant": "return"
+    },
+    {
+      "id": "approved-list",
+      "from": "mapper",
+      "to": "svc",
+      "y": 448,
+      "label": "List<Reservation>",
+      "variant": "return"
+    },
+    {
+      "id": "conflict-result",
+      "from": "svc",
+      "to": "axios",
+      "y": 480,
+      "label": "conflict = false，上限 20 人，已约 8 人",
+      "variant": "return"
+    },
+    {
+      "id": "conflict-hint",
+      "from": "axios",
+      "to": "browser",
+      "y": 512,
+      "label": "提示「该时段可预约，剩余 12 人」",
+      "variant": "return"
+    },
+    {
+      "id": "submit-click",
+      "from": "browser",
+      "to": "axios",
+      "y": 544,
+      "label": "确认弹窗后提交预约",
+      "variant": "emphasis"
+    },
+    {
+      "id": "submit-post",
+      "from": "axios",
+      "to": "auth",
+      "y": 576,
+      "label": "POST /api/reservation（Bearer Token）",
+      "variant": "security"
+    },
+    {
+      "id": "submit-pass",
+      "from": "auth",
+      "to": "ctrl",
+      "y": 608,
+      "label": "角色校验通过，写入 UserContext",
+      "variant": "security"
+    },
+    {
+      "id": "create-call",
+      "from": "ctrl",
+      "to": "svc",
+      "y": 640,
+      "label": "createReservation(dto)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "recheck-slot",
+      "from": "svc",
+      "to": "slot",
+      "y": 672,
+      "label": "① 开放时段校验：不可跨时段",
+      "variant": "default"
+    },
+    {
+      "id": "recheck-conflict",
+      "from": "svc",
+      "to": "mapper",
+      "y": 704,
+      "label": "② 冲突检测：新开始 < 旧结束 AND 新结束 > 旧开始",
+      "variant": "default"
+    },
+    {
+      "id": "recheck-capacity",
+      "from": "svc",
+      "to": "mapper",
+      "y": 736,
+      "label": "③ 容量校验：已通过人数 + 本次 ≤ 时段上限",
+      "variant": "default",
+      "note": "同一开放时段已通过预约人数之和 + 本次人数 ≤ slot_capacity"
+    },
+    {
+      "id": "insert",
+      "from": "svc",
+      "to": "mapper",
+      "y": 768,
+      "label": "insert：status = 0（待审核）",
+      "variant": "emphasis"
+    },
+    {
+      "id": "insert-sql",
+      "from": "mapper",
+      "to": "db",
+      "y": 800,
+      "label": "INSERT INTO reservation",
+      "variant": "default"
+    },
+    {
+      "id": "insert-id",
+      "from": "db",
+      "to": "svc",
+      "y": 832,
+      "label": "主键 id",
+      "variant": "return"
+    },
+    {
+      "id": "created",
+      "from": "ctrl",
+      "to": "axios",
+      "y": 864,
+      "label": "Result：预约提交成功，待管理员审核",
+      "variant": "return"
+    },
+    {
+      "id": "created-toast",
+      "from": "axios",
+      "to": "browser",
+      "y": 896,
+      "label": "提示「预约提交成功，待管理员审核」",
+      "variant": "return"
+    },
+    {
+      "id": "conflict-400",
+      "from": "svc",
+      "to": "axios",
+      "y": 928,
+      "label": "400「该时段与「10:00-12:00」的已通过预约冲突」",
+      "variant": "dashed"
+    },
+    {
+      "id": "conflict-error",
+      "from": "axios",
+      "to": "browser",
+      "y": 960,
+      "label": "ElMessage.error 展示冲突原因",
+      "variant": "dashed"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "browser",
+      "from": 158,
+      "to": 966,
+      "type": "external"
+    },
+    {
+      "participant": "axios",
+      "from": 160,
+      "to": 962,
+      "type": "frontend"
+    },
+    {
+      "participant": "auth",
+      "from": 188,
+      "to": 228,
+      "type": "security"
+    },
+    {
+      "participant": "auth",
+      "from": 572,
+      "to": 612,
+      "type": "security"
+    },
+    {
+      "participant": "ctrl",
+      "from": 220,
+      "to": 870,
+      "type": "backend"
+    },
+    {
+      "participant": "svc",
+      "from": 252,
+      "to": 956,
+      "type": "backend"
+    },
+    {
+      "participant": "slot",
+      "from": 284,
+      "to": 324,
+      "type": "backend"
+    },
+    {
+      "participant": "slot",
+      "from": 668,
+      "to": 678,
+      "type": "backend"
+    },
+    {
+      "participant": "mapper",
+      "from": 348,
+      "to": 452,
+      "type": "backend"
+    },
+    {
+      "participant": "mapper",
+      "from": 700,
+      "to": 812,
+      "type": "backend"
+    },
+    {
+      "participant": "db",
+      "from": 380,
+      "to": 420,
+      "type": "database"
+    },
+    {
+      "participant": "db",
+      "from": 796,
+      "to": 840,
+      "type": "database"
+    }
+  ]
+}

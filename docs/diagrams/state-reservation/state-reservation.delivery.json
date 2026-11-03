@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c5080c01-ea28-44d6-b347-ef115e19e47b",
+  "status": "current",
+  "command": "deliver",
+  "type": "lifecycle",
+  "input": "D:\\毕设\\lab\\docs\\diagrams\\state-reservation\\state-reservation.json",
+  "output": "D:\\毕设\\lab\\docs\\diagrams\\state-reservation\\state-reservation.html",
+  "specification": {
+    "sha256": "9503b8034bf06079679135857f7d937d03992a17317e93cec8614a4d269ee54e",
+    "bytes": 5663
+  },
+  "artifact": {
+    "sha256": "f473e8ef6c1c4f73349a02a4ee71f4982443195d18dbfa004ac4969e6c370735",
+    "bytes": 758874
+  }
+}

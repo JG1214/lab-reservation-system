@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>实验室/教室预约管理系统 数据库实体关系图</title>
+<style>
+  :root { --ink:#1b1f24; --muted:#5b6570; --line:#d8dee6; --accent:#2f5d8a; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 44px 52px 40px;
+    background: #ffffff; color: var(--ink);
+    font-family: "Microsoft YaHei", "PingFang SC", "Source Han Sans SC", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 12px; margin-bottom: 26px; }
+  h1 { font-size: 27px; margin: 0 0 8px; letter-spacing: .5px; font-weight: 700; }
+  .sub { font-size: 13.5px; color: var(--muted); letter-spacing: .3px; }
+  #canvas { display: flex; justify-content: center; padding: 4px 0 10px; }
+  #canvas svg { max-width: none; height: auto; }
+  .legend { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 13px; color: var(--muted); }
+  .legend b { color: var(--ink); font-weight: 600; }
+  .legend .row { margin-bottom: 6px; line-height: 1.75; }
+  .tag { display:inline-block; padding: 1px 7px; margin-right: 6px; border:1px solid var(--line); border-radius:3px; font-size:11.5px; color:var(--ink); background:#f6f8fa; }
+</style>
+</head>
+<body>
+<header>
+  <h1>实验室 / 教室预约管理系统 · 数据库实体关系图（ER）</h1>
+  <div class="sub">V4.0 基线 · 库名 reservation · 7 张业务表 · 依据 database/init_db.sql 建表语句</div>
+</header>
+
+<div id="canvas"></div>
+
+<div class="legend">
+  <div class="row"><b>约束标记：</b><span class="tag">PK</span>主键　<span class="tag">FK</span>逻辑外键（关联列，无物理外键约束）　<span class="tag">UK</span>唯一索引</div>
+  <div class="row"><b>关系基数：</b>‖—o{ 一对多（必选）　|o—o{ 一对多（可空）　‖—o| 一对一（至多一条）　}o..o{ 虚线＝时段校验约束，非外键列</div>
+  <div class="row"><b>说明：</b>reservation 通过 user_id / classroom_id 关联 sys_user 与 classroom；lab_open_slot 以 classroom_id 关联 classroom，并对 reservation 形成"预约须完整落在开放时段内"的校验约束；usage_record 以唯一索引 uk_reservation 保证一个预约仅登记一次；ai_config 为独立配置表，不与任何业务表关联。</div>
+</div>
+
+<script src="./mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'base',
+    fontFamily: '"Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif',
+    er: { useMaxWidth: false, layoutDirection: 'TB', entityPadding: 16, minEntityWidth: 150, minEntityHeight: 40, fontSize: 15 },
+    themeVariables: {
+      background: '#ffffff',
+      primaryColor: '#eef3f8',
+      primaryBorderColor: '#2f5d8a',
+      primaryTextColor: '#1b1f24',
+      lineColor: '#5b6570',
+      tertiaryColor: '#f7f9fb',
+      fontSize: '15px'
+    }
+  });
+  const src = "erDiagram\n    sys_user {\n        BIGINT id PK \"主键ID\"\n        VARCHAR username UK \"登录账号\"\n        VARCHAR password \"密码（BCrypt）\"\n        VARCHAR name \"真实姓名\"\n        VARCHAR student_no \"学号\"\n        VARCHAR phone \"联系电话\"\n        TINYINT role \"0学生 1实验室管理员 2教师\"\n        TINYINT status \"0禁用 1正常\"\n    }\n    classroom {\n        BIGINT id PK \"主键ID\"\n        VARCHAR name \"教室名称\"\n        VARCHAR building \"所属楼栋\"\n        VARCHAR room_no \"教室编号\"\n        TINYINT type \"1普通教室 2实验室 3机房\"\n        INT capacity \"容纳人数\"\n        VARCHAR open_requirement \"开放要求\"\n        TINYINT status \"0停用 1可用\"\n    }\n    reservation {\n        BIGINT id PK \"主键ID\"\n        BIGINT user_id FK \"预约用户ID\"\n        BIGINT classroom_id FK \"预约教室ID\"\n        DATE reserve_date \"预约日期\"\n        TIME start_time \"开始时间\"\n        TIME end_time \"结束时间\"\n        INT people_count \"使用人数\"\n        VARCHAR purpose \"预约用途\"\n        TINYINT status \"0待审核 1已通过 2已驳回 3已取消\"\n        BIGINT auditor_id FK \"审核人ID\"\n        DATETIME audit_time \"审核时间\"\n    }\n    lab_open_slot {\n        BIGINT id PK \"主键ID\"\n        BIGINT classroom_id FK \"实验室ID\"\n        DATE start_date \"开放起始日期\"\n        DATE end_date \"开放结束日期\"\n        VARCHAR week_days \"开放星期 1-7 逗号分隔\"\n        TIME open_time \"开放开始时间\"\n        TIME close_time \"开放结束时间\"\n        INT slot_capacity \"时段人数上限\"\n        TINYINT status \"0停用 1启用\"\n    }\n    user_favorite {\n        BIGINT id PK \"主键ID\"\n        BIGINT user_id FK \"用户ID\"\n        BIGINT classroom_id FK \"教室ID\"\n        DATETIME create_time \"收藏时间\"\n    }\n    usage_record {\n        BIGINT id PK \"主键ID\"\n        BIGINT reservation_id FK \"预约ID（唯一）\"\n        BIGINT classroom_id FK \"实验室ID（冗余）\"\n        BIGINT user_id FK \"预约用户ID（冗余）\"\n        DATE use_date \"使用日期\"\n        INT actual_people \"实际使用人数\"\n        TINYINT use_status \"1正常 2部分使用 3失约\"\n        BIGINT registrar_id FK \"登记人ID（管理员）\"\n        DATETIME check_time \"登记时间\"\n    }\n    ai_config {\n        BIGINT id PK \"主键ID\"\n        VARCHAR config_key UK \"配置键\"\n        TEXT config_value \"配置值\"\n        VARCHAR description \"配置说明\"\n        DATETIME update_time \"更新时间\"\n    }\n\n    sys_user ||--o{ reservation : \"发起预约\"\n    sys_user |o--o{ reservation : \"审核预约\"\n    classroom ||--o{ reservation : \"被预约\"\n    classroom ||--o{ lab_open_slot : \"配置开放时段\"\n    sys_user ||--o{ user_favorite : \"收藏\"\n    classroom ||--o{ user_favorite : \"被收藏\"\n    reservation ||--o| usage_record : \"使用登记\"\n    classroom ||--o{ usage_record : \"按实验室统计\"\n    sys_user ||--o{ usage_record : \"使用人\"\n    sys_user ||--o{ usage_record : \"登记人\"\n    lab_open_slot }o..o{ reservation : \"时段约束（无外键列）\"\n";
+  mermaid.render('erDiagram', src).then(function (res) {
+    document.getElementById('canvas').innerHTML = res.svg;
+    document.body.setAttribute('data-ready', '1');
+  }).catch(function (e) {
+    document.body.setAttribute('data-error', String(e && e.message || e));
+  });
+</script>
+</body>
+</html>

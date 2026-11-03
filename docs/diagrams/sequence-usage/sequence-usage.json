@@ -1,0 +1,441 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "使用登记时序：实际人数判定 · 失约批量标记 · 看板统计",
+    "subtitle": "UsageManage.vue → /api/usage → UsageRecordController → UsageRecordServiceImpl → Mapper → MySQL",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/sequence-usage/sequence-usage.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1700,
+      1092
+    ],
+    "repository": {
+      "url": "https://github.com/Alexander-cloud123/lab-reservation-system",
+      "provider": "github",
+      "revision": "99a731e22cf892aa4f000c82946bcc322d73191a"
+    }
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "管理员浏览器",
+      "icon": "frontend",
+      "sources": [
+        {
+          "path": "web/src/views/admin/UsageManage.vue",
+          "line": 1,
+          "label": "使用登记页面"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "frontend",
+      "label": "使用登记接口",
+      "icon": "cloud",
+      "sources": [
+        {
+          "path": "web/src/api/usage.js",
+          "line": 1,
+          "label": "前端接口封装"
+        }
+      ]
+    },
+    {
+      "id": "ctrl",
+      "type": "backend",
+      "label": "UsageRecordController",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/UsageRecordController.java",
+          "line": 41,
+          "end_line": 55,
+          "label": "pending / register / batch-noshow"
+        }
+      ]
+    },
+    {
+      "id": "svc",
+      "type": "backend",
+      "label": "UsageRecordServiceImpl",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/UsageRecordServiceImpl.java",
+          "line": 84,
+          "end_line": 221,
+          "label": "listPending / register / batchNoShow"
+        }
+      ]
+    },
+    {
+      "id": "mapper",
+      "type": "backend",
+      "label": "Mapper 层",
+      "icon": "database",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/mapper/UsageRecordMapper.java",
+          "line": 1,
+          "label": "UsageRecordMapper"
+        },
+        {
+          "path": "server/src/main/java/com/example/reservation/mapper/ReservationMapper.java",
+          "line": 1,
+          "label": "ReservationMapper"
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "MySQL",
+      "icon": "database",
+      "sources": [
+        {
+          "path": "database/init_db.sql",
+          "line": 136,
+          "end_line": 155,
+          "label": "usage_record 建表与唯一索引"
+        }
+      ]
+    },
+    {
+      "id": "stats",
+      "type": "backend",
+      "label": "StatsServiceImpl",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/StatsServiceImpl.java",
+          "line": 44,
+          "end_line": 219,
+          "label": "使用率 / 失约率"
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 360,
+      "label": "待登记列表 · 排除已登记与未结束"
+    },
+    {
+      "from": 368,
+      "to": 600,
+      "label": "登记实际使用 · 三态判定"
+    },
+    {
+      "from": 608,
+      "to": 780,
+      "label": "批量失约"
+    },
+    {
+      "from": 788,
+      "to": 990,
+      "label": "看板统计 · 使用率与失约率"
+    }
+  ],
+  "messages": [
+    {
+      "id": "n1",
+      "from": "browser",
+      "to": "api",
+      "label": "GET /usage/pending",
+      "variant": "emphasis",
+      "y": 165
+    },
+    {
+      "id": "n2",
+      "from": "api",
+      "to": "ctrl",
+      "label": "listPending(date)",
+      "variant": "default",
+      "y": 195
+    },
+    {
+      "id": "n3",
+      "from": "ctrl",
+      "to": "svc",
+      "label": "listPending(date)",
+      "variant": "default",
+      "y": 225
+    },
+    {
+      "id": "n4",
+      "from": "svc",
+      "to": "mapper",
+      "label": "selectList(已登记预约号)",
+      "variant": "default",
+      "y": 255
+    },
+    {
+      "id": "n5",
+      "from": "mapper",
+      "to": "db",
+      "label": "SELECT reservation_id（已登记集合）",
+      "variant": "default",
+      "y": 285
+    },
+    {
+      "id": "n6",
+      "from": "svc",
+      "to": "mapper",
+      "label": "selectList(status=1，近 14 天)",
+      "variant": "default",
+      "y": 315
+    },
+    {
+      "id": "n7",
+      "from": "mapper",
+      "to": "db",
+      "label": "SELECT 已通过且已结束",
+      "variant": "default",
+      "y": 345
+    },
+    {
+      "id": "n8",
+      "from": "api",
+      "to": "browser",
+      "label": "待登记列表（未登记）",
+      "variant": "return",
+      "y": 375
+    },
+    {
+      "id": "n9",
+      "from": "browser",
+      "to": "api",
+      "label": "POST /usage 实际人数",
+      "variant": "emphasis",
+      "y": 405
+    },
+    {
+      "id": "n10",
+      "from": "api",
+      "to": "ctrl",
+      "label": "register(UsageRecordDTO)",
+      "variant": "default",
+      "y": 435
+    },
+    {
+      "id": "n11",
+      "from": "ctrl",
+      "to": "svc",
+      "label": "register(dto)",
+      "variant": "default",
+      "y": 465
+    },
+    {
+      "id": "n12",
+      "from": "svc",
+      "to": "mapper",
+      "label": "selectById + selectCount 防重复",
+      "variant": "default",
+      "y": 495
+    },
+    {
+      "id": "n13",
+      "from": "mapper",
+      "to": "db",
+      "label": "SELECT 预约 / COUNT(*)（须已通过 1）",
+      "variant": "default",
+      "y": 525
+    },
+    {
+      "id": "n14",
+      "from": "svc",
+      "to": "mapper",
+      "label": "insert（判定 正常/部分/失约）",
+      "variant": "default",
+      "y": 555
+    },
+    {
+      "id": "n15",
+      "from": "mapper",
+      "to": "db",
+      "label": "INSERT usage_record（uk 兜底）",
+      "variant": "default",
+      "y": 585
+    },
+    {
+      "id": "n16",
+      "from": "api",
+      "to": "browser",
+      "label": "登记成功",
+      "variant": "return",
+      "y": 615
+    },
+    {
+      "id": "n17",
+      "from": "browser",
+      "to": "api",
+      "label": "POST /usage/batch-noshow {ids}",
+      "variant": "emphasis",
+      "y": 645
+    },
+    {
+      "id": "n18",
+      "from": "api",
+      "to": "ctrl",
+      "label": "batchNoShow(ids, remark)",
+      "variant": "default",
+      "y": 675
+    },
+    {
+      "id": "n19",
+      "from": "ctrl",
+      "to": "svc",
+      "label": "batchNoShow(...)",
+      "variant": "default",
+      "y": 705
+    },
+    {
+      "id": "n20",
+      "from": "svc",
+      "to": "mapper",
+      "label": "过滤已通过 / 未登记 / 已开始",
+      "variant": "default",
+      "y": 735
+    },
+    {
+      "id": "n21",
+      "from": "mapper",
+      "to": "db",
+      "label": "INSERT ×N use_status=3",
+      "variant": "default",
+      "y": 765
+    },
+    {
+      "id": "n22",
+      "from": "api",
+      "to": "browser",
+      "label": "已标记失约 N 条",
+      "variant": "return",
+      "y": 795
+    },
+    {
+      "id": "n23",
+      "from": "browser",
+      "to": "api",
+      "label": "GET /stats/dashboard",
+      "variant": "emphasis",
+      "y": 825
+    },
+    {
+      "id": "n24",
+      "from": "api",
+      "to": "stats",
+      "label": "usageRate(startDate, endDate)",
+      "variant": "default",
+      "y": 855
+    },
+    {
+      "id": "n25",
+      "from": "stats",
+      "to": "mapper",
+      "label": "聚合 usage_record 使用状态",
+      "variant": "default",
+      "y": 885
+    },
+    {
+      "id": "n26",
+      "from": "mapper",
+      "to": "db",
+      "label": "GROUP BY classroom_id / use_status",
+      "variant": "default",
+      "y": 915
+    },
+    {
+      "id": "n27",
+      "from": "stats",
+      "to": "api",
+      "label": "使用率 / 失约率（分母 = 已通过条数）",
+      "variant": "return",
+      "y": 945
+    },
+    {
+      "id": "n28",
+      "from": "api",
+      "to": "browser",
+      "label": "看板数据",
+      "variant": "return",
+      "y": 975
+    }
+  ],
+  "activations": [
+    {
+      "participant": "browser",
+      "from": 158,
+      "to": 983,
+      "type": "external"
+    },
+    {
+      "participant": "api",
+      "from": 165,
+      "to": 980,
+      "type": "frontend"
+    },
+    {
+      "participant": "ctrl",
+      "from": 195,
+      "to": 700,
+      "type": "backend"
+    },
+    {
+      "participant": "svc",
+      "from": 225,
+      "to": 740,
+      "type": "backend"
+    },
+    {
+      "participant": "mapper",
+      "from": 255,
+      "to": 955,
+      "type": "backend"
+    },
+    {
+      "participant": "db",
+      "from": 285,
+      "to": 950,
+      "type": "database"
+    },
+    {
+      "participant": "stats",
+      "from": 660,
+      "to": 950,
+      "type": "backend"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "三态判定与人数校验",
+      "items": [
+        "仅已通过(1)的预约可登记；同一预约只能登记一次：先 selectCount 预查，再由 uk_reservation 唯一索引兜底（UsageRecordServiceImpl.java:127/130/169）",
+        "use_status=3 失约时 actual_people 必须为 0；否则 1 ≤ 实际人数 ≤ 预约人数（:148）",
+        "部分使用要求实际人数严格小于预约人数，正常使用等于预约人数（:154）"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "失约建模",
+      "items": [
+        "失约不改变 reservation.status，预约仍为已通过，只以 use_status=3 记录（UsageRecord.java:16-18）",
+        "批量失约默认备注「管理员批量标记失约」，命中即跳过已登记记录（:63/:192）",
+        "已登记、未开始、非已通过的预约会被过滤，避免误记（:198-202）"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "统计口径",
+      "items": [
+        "使用率 = 已通过预约占用小时 ÷（天数 × 每日 14 小时）× 100（StatsServiceImpl.java:44）",
+        "失约率 = 失约记录数 ÷ 区间内已通过预约条数（:217-219）",
+        "预约表不存使用状态：管理端列表按 reservation_id 关联 usage_record 派生（ReservationConverter.java:77/144）"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "0728eb6b-e5b1-419b-b636-6f8ebaec0211",
+  "status": "current",
+  "command": "deliver",
+  "type": "sequence",
+  "input": "D:\\毕设\\lab\\docs\\diagrams\\sequence-cancel\\candidate.json",
+  "output": "D:\\毕设\\lab\\docs\\diagrams\\sequence-cancel\\sequence-cancel.html",
+  "specification": {
+    "sha256": "1843aff9ec1b7de9a015b62d7a3cff588079f96a639b8ed0d7c77b9199f7388d",
+    "bytes": 7611
+  },
+  "artifact": {
+    "sha256": "851613c0eae6439e294bcad8f61a0ba75d0938be100485c4f38d0e0399d7be7a",
+    "bytes": 768720
+  }
+}

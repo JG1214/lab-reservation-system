@@ -1,0 +1,495 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "实验室/教室预约管理系统 · 系统架构",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/architecture/architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Alexander-cloud123/lab-reservation-system",
+      "provider": "github",
+      "revision": "99a731e22cf892aa4f000c82946bcc322d73191a"
+    }
+  },
+  "components": [
+    {
+      "id": "student",
+      "type": "frontend",
+      "label": "学生端 SPA",
+      "sublabel": "Vue 3.4 · 6 个页面",
+      "pos": [
+        40,
+        200
+      ],
+      "size": [
+        190,
+        78
+      ],
+      "sources": [
+        {
+          "path": "web/src/router/index.js",
+          "label": "学生端路由"
+        }
+      ]
+    },
+    {
+      "id": "admin",
+      "type": "frontend",
+      "label": "管理端 SPA",
+      "sublabel": "admin 9 + common 3 页",
+      "pos": [
+        40,
+        380
+      ],
+      "size": [
+        190,
+        78
+      ],
+      "sources": [
+        {
+          "path": "web/src/router/index.js",
+          "label": "管理端路由"
+        }
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "cloud",
+      "label": "Nginx 反向代理",
+      "sublabel": "容器 :80 · 静态产物",
+      "tag": "开发期 Vite :5173",
+      "pos": [
+        300,
+        255
+      ],
+      "size": [
+        160,
+        96
+      ],
+      "sources": [
+        {
+          "path": "web/nginx.conf",
+          "line": 35,
+          "label": "/api 反代"
+        },
+        {
+          "path": "web/vite.config.js",
+          "line": 20,
+          "label": "Vite 代理"
+        }
+      ]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "JWT 鉴权拦截器",
+      "sublabel": "common/AuthInterceptor",
+      "pos": [
+        540,
+        95
+      ],
+      "size": [
+        200,
+        78
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/common/AuthInterceptor.java",
+          "line": 28
+        }
+      ]
+    },
+    {
+      "id": "controller",
+      "type": "backend",
+      "label": "Controller 层",
+      "sublabel": "11 个 Controller · 57 端点",
+      "pos": [
+        540,
+        240
+      ],
+      "size": [
+        210,
+        96
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ReservationController.java",
+          "line": 46
+        }
+      ]
+    },
+    {
+      "id": "exception",
+      "type": "backend",
+      "label": "全局异常处理",
+      "sublabel": "GlobalExceptionHandler",
+      "pos": [
+        840,
+        95
+      ],
+      "size": [
+        210,
+        78
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/common/GlobalExceptionHandler.java",
+          "line": 19
+        }
+      ]
+    },
+    {
+      "id": "service",
+      "type": "backend",
+      "label": "Service 层",
+      "sublabel": "service / service.impl",
+      "tag": "冲突检测 · 开放时段",
+      "pos": [
+        840,
+        240
+      ],
+      "size": [
+        210,
+        96
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/ReservationServiceImpl.java",
+          "line": 54,
+          "label": "冲突公式"
+        }
+      ]
+    },
+    {
+      "id": "mapper",
+      "type": "backend",
+      "label": "Mapper 层",
+      "sublabel": "MyBatis-Plus 3.5.7",
+      "pos": [
+        1150,
+        240
+      ],
+      "size": [
+        210,
+        90
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/mapper/ReservationMapper.java"
+        }
+      ]
+    },
+    {
+      "id": "entity",
+      "type": "backend",
+      "label": "Entity 层",
+      "sublabel": "7 张表实体 · dto / vo",
+      "pos": [
+        1150,
+        470
+      ],
+      "size": [
+        210,
+        78
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/entity/Reservation.java"
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "type": "backend",
+      "label": "AI 模块（ai 包）",
+      "sublabel": "4 项能力 · 含 SSE 流式",
+      "tag": "独立低耦合 · 只读",
+      "pos": [
+        540,
+        450
+      ],
+      "size": [
+        210,
+        100
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/ai/controller/AiController.java",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "mysql",
+      "type": "database",
+      "label": "MySQL 8",
+      "sublabel": "reservation 库 · 7 张表",
+      "pos": [
+        1480,
+        235
+      ],
+      "size": [
+        200,
+        96
+      ],
+      "sources": [
+        {
+          "path": "database/init_db.sql",
+          "line": 57,
+          "label": "reservation 表"
+        }
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "database",
+      "label": "Redis（可选）",
+      "sublabel": "Token / 统计缓存",
+      "pos": [
+        1480,
+        400
+      ],
+      "size": [
+        200,
+        88
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/resources/application.yml",
+          "line": 74,
+          "label": "redis.enable"
+        }
+      ]
+    },
+    {
+      "id": "agnes",
+      "type": "external",
+      "label": "Agnes AI 服务",
+      "sublabel": "agnes-3.0-flash · 60s",
+      "pos": [
+        1480,
+        620
+      ],
+      "size": [
+        200,
+        96
+      ],
+      "sources": [
+        {
+          "path": "server/src/main/resources/application.yml",
+          "line": 62,
+          "label": "超时 / 降级"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "客户端层 · Vue 3.4 + Vite 5",
+      "wraps": [
+        "student",
+        "admin"
+      ],
+      "pad": 28
+    },
+    {
+      "kind": "region",
+      "label": "接入层 · 生产 Nginx / 开发 Vite",
+      "wraps": [
+        "gateway"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "应用层 · Spring Boot 3.2.10 + JDK 21",
+      "wraps": [
+        "auth",
+        "controller",
+        "exception",
+        "service",
+        "mapper",
+        "entity",
+        "ai"
+      ],
+      "pad": 30
+    },
+    {
+      "kind": "region",
+      "label": "数据层 · MySQL 8 / Redis",
+      "wraps": [
+        "mysql",
+        "redis"
+      ],
+      "pad": 30
+    },
+    {
+      "kind": "region",
+      "label": "外部服务 · Agnes AI",
+      "wraps": [
+        "agnes"
+      ],
+      "pad": 24
+    }
+  ],
+  "connections": [
+    {
+      "id": "student-gateway",
+      "from": "student",
+      "to": "gateway",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "admin-gateway",
+      "from": "admin",
+      "to": "gateway",
+      "label": "HTTPS"
+    },
+    {
+      "id": "gateway-auth",
+      "from": "gateway",
+      "to": "auth",
+      "label": "HTTP/JSON",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "auth-controller",
+      "from": "auth",
+      "to": "controller",
+      "label": "校验 Token · 角色",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDx": 14
+    },
+    {
+      "id": "controller-exception",
+      "from": "controller",
+      "to": "exception",
+      "label": "异常兜底 → Result",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "controller-service",
+      "from": "controller",
+      "to": "service",
+      "label": "业务调用"
+    },
+    {
+      "id": "service-mapper",
+      "from": "service",
+      "to": "mapper",
+      "label": "MyBatis-Plus"
+    },
+    {
+      "id": "mapper-entity",
+      "from": "mapper",
+      "to": "entity",
+      "label": "ORM 映射",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        1269,
+        396
+      ]
+    },
+    {
+      "id": "mapper-mysql",
+      "from": "mapper",
+      "to": "mysql",
+      "label": "JDBC · 7 张表"
+    },
+    {
+      "id": "service-redis",
+      "from": "service",
+      "to": "redis",
+      "label": "缓存读写（redis.enable）",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          945,
+          592
+        ],
+        [
+          1580,
+          592
+        ]
+      ]
+    },
+    {
+      "id": "gateway-ai",
+      "from": "gateway",
+      "to": "ai",
+      "label": "/api/ai/**",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "ai-agnes",
+      "from": "ai",
+      "to": "agnes",
+      "label": "HTTPS · 60s 超时 · 失败降级",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "via": [
+        [
+          645,
+          646
+        ],
+        [
+          1444,
+          646
+        ],
+        [
+          1444,
+          668
+        ]
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "客户端与接入",
+      "items": [
+        "18 个页面：管理端 9 + 学生端 6 + 公共 3，路由守卫 + Pinia 按角色分流",
+        "生产：Nginx 容器托管 dist，/api 原样反代 api:8080，SSE 关闭 proxy_buffering",
+        "开发：Vite dev proxy 把 /api 转发到 localhost:8080，VITE_API_TARGET 可覆盖"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "应用层四层结构",
+      "items": [
+        "controller → service / service.impl → mapper → entity，禁止跨层调用",
+        "11 个 Controller / 57 个端点，统一返回 Result{code,message,data}",
+        "JWT 有效期 24h，AuthInterceptor 拦 /api/**，仅放行登录 / 注册"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "核心业务规则",
+      "items": [
+        "冲突检测：新开始 < 旧结束 AND 新结束 > 旧开始，只与已通过(1)比较",
+        "预约须完整落在 lab_open_slot 开放时段内，单时段设人数上限",
+        "状态 0 待审核 → 1 已通过 / 2 已驳回；0、1 → 3 已取消；前后端双重校验"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "数据与 AI",
+      "items": [
+        "7 张表：sys_user、classroom、reservation、user_favorite、ai_config、lab_open_slot、usage_record",
+        "Redis 可选：token 与看板缓存，redis.enable=false 退化为纯 JWT + 直接查库",
+        "AI 只读不写，ai.enable 一键启停，关闭后核心系统不受影响"
+      ]
+    }
+  ]
+}

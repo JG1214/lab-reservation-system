@@ -1,0 +1,417 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "管理员审核时序：分页查询 · 单条与批量审核",
+    "subtitle": "AuditManage.vue → /api/reservation/manage → ReservationController → ReservationServiceImpl → ReservationMapper → MySQL",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/sequence-audit/sequence-audit.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1700,
+      1092
+    ],
+    "repository": {
+      "url": "https://github.com/Alexander-cloud123/lab-reservation-system",
+      "provider": "github",
+      "revision": "99a731e22cf892aa4f000c82946bcc322d73191a"
+    }
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "管理员浏览器",
+      "icon": "frontend",
+      "sources": [
+        {
+          "path": "web/src/views/admin/AuditManage.vue",
+          "line": 350,
+          "end_line": 389,
+          "label": "loadData 序号与重试"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "frontend",
+      "label": "预约管理接口",
+      "icon": "cloud",
+      "sources": [
+        {
+          "path": "web/src/api/reservation.js",
+          "line": 1,
+          "label": "前端接口封装"
+        }
+      ]
+    },
+    {
+      "id": "ctrl",
+      "type": "backend",
+      "label": "ReservationController",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/controller/ReservationController.java",
+          "line": 99,
+          "end_line": 156,
+          "label": "pageManage / audit / batch-audit"
+        }
+      ]
+    },
+    {
+      "id": "svc",
+      "type": "backend",
+      "label": "ReservationServiceImpl",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/service/impl/ReservationServiceImpl.java",
+          "line": 427,
+          "end_line": 603,
+          "label": "auditReservation / batchAudit"
+        }
+      ]
+    },
+    {
+      "id": "mapper",
+      "type": "backend",
+      "label": "ReservationMapper",
+      "icon": "database",
+      "sources": [
+        {
+          "path": "server/src/main/java/com/example/reservation/mapper/ReservationMapper.java",
+          "line": 1,
+          "label": "Mapper 接口"
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "MySQL",
+      "icon": "database",
+      "sources": [
+        {
+          "path": "database/init_db.sql",
+          "line": 60,
+          "label": "reservation 建表"
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 420,
+      "label": "列表查询 · 请求序号防竞态"
+    },
+    {
+      "from": 428,
+      "to": 660,
+      "label": "单条通过 · 冲突与容量复查"
+    },
+    {
+      "from": 668,
+      "to": 810,
+      "label": "单条驳回 · 备注必填"
+    },
+    {
+      "from": 818,
+      "to": 990,
+      "label": "批量审核 · 逐条串行校验"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m1",
+      "from": "browser",
+      "to": "api",
+      "label": "GET /manage 分页查询",
+      "variant": "emphasis",
+      "y": 165
+    },
+    {
+      "id": "m2",
+      "from": "api",
+      "to": "ctrl",
+      "label": "pageManage(page, size, status)",
+      "variant": "default",
+      "y": 195
+    },
+    {
+      "id": "m3",
+      "from": "ctrl",
+      "to": "svc",
+      "label": "pageManage(...)",
+      "variant": "default",
+      "y": 225
+    },
+    {
+      "id": "m4",
+      "from": "svc",
+      "to": "mapper",
+      "label": "selectPage(Page, Wrapper)",
+      "variant": "default",
+      "y": 255
+    },
+    {
+      "id": "m5",
+      "from": "mapper",
+      "to": "db",
+      "label": "SELECT 预约分页（状态筛选）",
+      "variant": "default",
+      "y": 285
+    },
+    {
+      "id": "m6",
+      "from": "mapper",
+      "to": "svc",
+      "label": "Page<Reservation>（records + total）",
+      "variant": "return",
+      "y": 315
+    },
+    {
+      "id": "m7",
+      "from": "svc",
+      "to": "ctrl",
+      "label": "PageResult<VO>（补全教师/教室）",
+      "variant": "return",
+      "y": 345
+    },
+    {
+      "id": "m8",
+      "from": "ctrl",
+      "to": "api",
+      "label": "Result.success",
+      "variant": "return",
+      "y": 375
+    },
+    {
+      "id": "m9",
+      "from": "api",
+      "to": "browser",
+      "label": "200 JSON（丢弃过期响应）",
+      "variant": "return",
+      "y": 405
+    },
+    {
+      "id": "m10",
+      "from": "browser",
+      "to": "api",
+      "label": "PUT /{id}/audit status=1",
+      "variant": "emphasis",
+      "y": 435
+    },
+    {
+      "id": "m11",
+      "from": "api",
+      "to": "ctrl",
+      "label": "auditReservation(id, dto)",
+      "variant": "default",
+      "y": 465
+    },
+    {
+      "id": "m12",
+      "from": "ctrl",
+      "to": "svc",
+      "label": "auditReservation(id, dto)",
+      "variant": "default",
+      "y": 495
+    },
+    {
+      "id": "m13",
+      "from": "svc",
+      "to": "mapper",
+      "label": "selectById + 锁教室行",
+      "variant": "security",
+      "y": 525
+    },
+    {
+      "id": "m14",
+      "from": "mapper",
+      "to": "db",
+      "label": "SELECT 预约 / 教室 FOR UPDATE",
+      "variant": "security",
+      "y": 555
+    },
+    {
+      "id": "m15",
+      "from": "db",
+      "to": "mapper",
+      "label": "待审核预约 + 已通过列表",
+      "variant": "return",
+      "y": 585
+    },
+    {
+      "id": "m16",
+      "from": "svc",
+      "to": "mapper",
+      "label": "复查重叠 + 容量，条件更新",
+      "variant": "default",
+      "y": 615
+    },
+    {
+      "id": "m17",
+      "from": "mapper",
+      "to": "db",
+      "label": "SET status=1，写审核人/时间",
+      "variant": "default",
+      "y": 645
+    },
+    {
+      "id": "m18",
+      "from": "api",
+      "to": "browser",
+      "label": "审核成功 / 状态已变更",
+      "variant": "return",
+      "y": 675
+    },
+    {
+      "id": "m19",
+      "from": "browser",
+      "to": "api",
+      "label": "PUT /{id}/audit status=2（备注必填）",
+      "variant": "emphasis",
+      "y": 705
+    },
+    {
+      "id": "m20",
+      "from": "api",
+      "to": "ctrl",
+      "label": "auditReservation(id, dto)",
+      "variant": "default",
+      "y": 735
+    },
+    {
+      "id": "m21",
+      "from": "svc",
+      "to": "mapper",
+      "label": "UPDATE ... AND status=0",
+      "variant": "default",
+      "y": 765
+    },
+    {
+      "id": "m22",
+      "from": "mapper",
+      "to": "db",
+      "label": "SET status=2，驳回备注必填",
+      "variant": "default",
+      "y": 795
+    },
+    {
+      "id": "m23",
+      "from": "api",
+      "to": "browser",
+      "label": "已驳回，刷新列表",
+      "variant": "return",
+      "y": 825
+    },
+    {
+      "id": "m24",
+      "from": "browser",
+      "to": "api",
+      "label": "POST /batch-audit {ids}",
+      "variant": "emphasis",
+      "y": 855
+    },
+    {
+      "id": "m25",
+      "from": "api",
+      "to": "ctrl",
+      "label": "batchAudit(BatchAuditDTO)",
+      "variant": "default",
+      "y": 885
+    },
+    {
+      "id": "m26",
+      "from": "svc",
+      "to": "mapper",
+      "label": "selectBatchIds + 排序加锁 + 批内校验",
+      "variant": "security",
+      "y": 915
+    },
+    {
+      "id": "m27",
+      "from": "mapper",
+      "to": "db",
+      "label": "SELECT ... FOR UPDATE / 批量 UPDATE",
+      "variant": "default",
+      "y": 945
+    },
+    {
+      "id": "m28",
+      "from": "api",
+      "to": "browser",
+      "label": "批量成功，共 N 条；刷新列表",
+      "variant": "return",
+      "y": 975
+    }
+  ],
+  "activations": [
+    {
+      "participant": "browser",
+      "from": 158,
+      "to": 983,
+      "type": "external"
+    },
+    {
+      "participant": "api",
+      "from": 165,
+      "to": 980,
+      "type": "frontend"
+    },
+    {
+      "participant": "ctrl",
+      "from": 195,
+      "to": 780,
+      "type": "backend"
+    },
+    {
+      "participant": "svc",
+      "from": 225,
+      "to": 800,
+      "type": "backend"
+    },
+    {
+      "participant": "mapper",
+      "from": 255,
+      "to": 960,
+      "type": "backend"
+    },
+    {
+      "participant": "db",
+      "from": 285,
+      "to": 955,
+      "type": "database"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "分页查询与防竞态",
+      "items": [
+        "reqSeq 自增：仅 mySeq === reqSeq 的响应写回表格，乱序旧响应直接丢弃（AuditManage.vue:352/366）",
+        "网络级失败按 400ms×n 退避重试，最多 2 次，仍失败则保留当前表格（:378）",
+        "AI 合规校验单并发（AUTO_CHECK_CONCURRENCY=1）、首屏限量 5 条，避免抢占连接池把列表查询饿死（:230/:232）"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "审核一致性",
+      "items": [
+        "仅待审核(0)可审核；驳回必填审核备注（ReservationServiceImpl.java:437/441）",
+        "通过前锁教室行 FOR UPDATE 并加锁读已通过列表，复查重叠公式：新开始 < 旧结束 AND 新结束 > 旧开始（:447/:452）",
+        "条件更新 UPDATE ... AND status=0，影响行数 ≠ 1 即提示「预约状态已变更，请刷新后重试」（:470/:480）"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "批量审核",
+      "items": [
+        "按教室 ID 排序加锁，避免并发批量审核交叉死锁（:501）",
+        "批内两两重叠 + 以时间边界分段累计人数校验，任一冲突整批拒绝并指名 ID（:513/:539/:526）",
+        "批量 UPDATE 仅对待审核记录生效并返回实际更新条数（:591/:599）"
+      ]
+    }
+  ]
+}
