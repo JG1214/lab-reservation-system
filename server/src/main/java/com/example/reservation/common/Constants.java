@@ -15,8 +15,10 @@ public final class Constants {
     /* ===== 角色 ===== */
     /** 角色：学生 */
     public static final int ROLE_STUDENT = 0;
-    /** 角色：管理员 */
+    /** 角色：实验室管理员 */
     public static final int ROLE_ADMIN = 1;
+    /** 角色：教师（需求文档 V4.0 1.2：教师具备学生全部能力 + 只读查看实验室占用，无审核权） */
+    public static final int ROLE_TEACHER = 2;
 
     /* ===== 用户状态 ===== */
     /** 用户状态：禁用 */
@@ -40,6 +42,22 @@ public final class Constants {
     /** 教室状态：可用 */
     public static final int CLASSROOM_STATUS_ENABLED = 1;
 
+    /* ===== 开放时段状态（需求设计文档 V4.0 规则 3）===== */
+    /** 开放时段状态：停用（停用后该时段不再对外可预约） */
+    public static final int SLOT_STATUS_DISABLED = 0;
+    /** 开放时段状态：启用 */
+    public static final int SLOT_STATUS_ENABLED = 1;
+
+    /* ===== 使用记录（需求设计文档 V4.0 2.3.4 表 7）===== */
+    /** 使用状态：正常使用（实际人数 = 预约人数） */
+    public static final int USE_STATUS_NORMAL = 1;
+    /** 使用状态：部分使用（实际人数 < 预约人数） */
+    public static final int USE_STATUS_PARTIAL = 2;
+    /** 使用状态：失约（实际人数 = 0，预约状态仍为已通过） */
+    public static final int USE_STATUS_NO_SHOW = 3;
+    /** 登记备注最大长度（与 usage_record.check_remark VARCHAR(255) 对齐） */
+    public static final int CHECK_REMARK_MAX_LENGTH = 255;
+
     /* ===== Token 鉴权 ===== */
     /** 请求头名称 */
     public static final String TOKEN_HEADER = "Authorization";
@@ -55,8 +73,23 @@ public final class Constants {
             "/api/classroom/manage",
             "/api/reservation/manage",
             "/api/reservation/export",
-            "/api/stats"
+            "/api/stats",
+            // V4.0 开放时段【配置】与使用登记均属管理员专属（需求文档 V4.0 1.2 权限表）。
+            // 注意此处只列管理前缀，学生端查询可用时段的 /api/slot/classroom/** 由
+            // AuthInterceptor.openPathPrefixes 放行，故不能再把整个 /api/slot 列为管理员前缀
+            "/api/slot/manage",
+            "/api/slot/batch",
+            "/api/usage"
     };
+
+    /** 开放时段只读接口前缀：学生端/教师端查询某实验室某日的可用时段，登录即可访问 */
+    public static final String SLOT_PUBLIC_PATH_PREFIX = "/api/slot/classroom/";
+
+    /* ===== 教师专属接口（需求文档 V4.0 1.2）=====
+     * 教师不具备审核、资源维护、时段配置、使用登记权限；其可见的「教室列表/详情/开放时段查询」
+     * 与管理员共用同一批只读接口，无需额外白名单，故此处保留空列表作为权限边界的显式声明，
+     * 后续若新增教师专属接口，必须登记在此并由 AuthInterceptor 校验。 */
+    public static final String[] TEACHER_API_PREFIXES = {};
 
     /** 密码最小长度 */
     public static final int PASSWORD_MIN_LENGTH = 6;
@@ -84,6 +117,8 @@ public final class Constants {
     public static final LocalTime DAILY_SLOT_START = LocalTime.of(8, 0);
     /** 每日可预约窗口右边界（含）：22:00，提交预约时强制 endTime ≤ 该时刻 */
     public static final LocalTime DAILY_SLOT_END = LocalTime.of(22, 0);
+    /** 教师单次预约时长上限（小时）：区别于学生，作为「多角色权限」的可验证差异 */
+    public static final int TEACHER_MAX_RESERVATION_HOURS = DAILY_SLOT_END.getHour() - DAILY_SLOT_START.getHour();
     /** 每日可预约窗口左边界（小时）：由 DAILY_SLOT_START 派生，整点时段计算用（N4：唯一来源） */
     public static final int DAILY_SLOT_START_HOUR = DAILY_SLOT_START.getHour();
     /** 每日可预约窗口右边界（小时）：由 DAILY_SLOT_END 派生，整点时段计算用（N4：唯一来源） */

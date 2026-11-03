@@ -16,11 +16,14 @@ import com.example.reservation.config.RedisCache;
 import com.example.reservation.dto.LoginDTO;
 import com.example.reservation.dto.PasswordDTO;
 import com.example.reservation.dto.RegisterDTO;
+import com.example.reservation.dto.UserCreateDTO;
 import com.example.reservation.dto.UserInfoDTO;
 import com.example.reservation.entity.Reservation;
 import com.example.reservation.entity.SysUser;
+import com.example.reservation.entity.UsageRecord;
 import com.example.reservation.mapper.ReservationMapper;
 import com.example.reservation.mapper.SysUserMapper;
+import com.example.reservation.mapper.UsageRecordMapper;
 import com.example.reservation.service.UserService;
 import com.example.reservation.vo.LoginVO;
 import com.example.reservation.vo.UserStatsVO;
@@ -61,6 +64,10 @@ public class UserServiceImpl implements UserService {
     @Resource
     private ReservationMapper reservationMapper;
 
+    /** 实际使用次数统计来源（只读 usage_record，不侵入预约业务逻辑） */
+    @Resource
+    private UsageRecordMapper usageRecordMapper;
+
     @Resource
     private JwtUtil jwtUtil;
 
@@ -77,7 +84,9 @@ public class UserServiceImpl implements UserService {
         if (StrUtil.hasBlank(dto.getUsername(), dto.getPassword()) || dto.getRole() == null) {
             throw new BusinessException("账号、密码、角色不能为空");
         }
-        if (dto.getRole() != Constants.ROLE_STUDENT && dto.getRole() != Constants.ROLE_ADMIN) {
+        // 三角色登录（需求文档 V4.0 1.2）：学生 0 / 实验室管理员 1 / 教师 2
+        if (dto.getRole() != Constants.ROLE_STUDENT && dto.getRole() != Constants.ROLE_ADMIN
+                && dto.getRole() != Constants.ROLE_TEACHER) {
             throw new BusinessException("角色参数不合法");
         }
 
@@ -132,9 +141,19 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void register(RegisterDTO dto) {
-        // 必填项校验
-        if (StrUtil.hasBlank(dto.getUsername(), dto.getPassword(), dto.getConfirmPassword(), dto.getName(), dto.getStudentNo())) {
-            throw new BusinessException("请完整填写必填信息（账号/密码/确认密码/姓名/学号）");
+        // 注册角色：未传按学生处理；仅允许学生(0)/教师(2)，管理员为系统预置、注册接口不提供
+        // （需求设计文档 V4.0 1.3「公共功能」+ 2.4 公共页面第 2 条）
+        int regRole = dto.getRole() == null ? Constants.ROLE_STUDENT : dto.getRole();
+        if (regRole != Constants.ROLE_STUDENT && regRole != Constants.ROLE_TEACHER) {
+            throw new BusinessException("注册角色不合法（0-学生，2-教师）");
+        }
+        // 必填项校验：学号仅学生必填，教师无学号、改用工号口径同样必填（与建号口径一致）
+        if (StrUtil.hasBlank(dto.getUsername(), dto.getPassword(), dto.getConfirmPassword(), dto.getName())) {
+            throw new BusinessException("请完整填写必填信息（账号/密码/确认密码/姓名）");
+        }
+        if (StrUtil.isBlank(dto.getStudentNo())) {
+            throw new BusinessException(regRole == Constants.ROLE_TEACHER
+                    ? "请填写工号" : "请填写学号");
         }
         if (dto.getUsername().length() > 32) {
             throw new BusinessException("账号长度不能超过 32 个字符");
@@ -143,7 +162,8 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("姓名长度不能超过 20 个字符");
         }
         if (dto.getStudentNo().length() > 20) {
-            throw new BusinessException("学号长度不能超过 20 个字符");
+            throw new BusinessException(regRole == Constants.ROLE_TEACHER
+                    ? "工号长度不能超过 20 个字符" : "学号长度不能超过 20 个字符");
         }
         if (StrUtil.isNotBlank(dto.getEmail()) && dto.getEmail().length() > 50) {
             throw new BusinessException("邮箱长度不能超过 50 个字符");
@@ -166,7 +186,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("该账号已被注册，请更换账号");
         }
 
-        // 注册角色固定为学生，默认正常状态，密码 BCrypt 加密存储（数据库中无明文）
+        // 注册角色为前端所选（0-学生 / 2-教师），默认正常状态，密码 BCrypt 加密存储（数据库中无明文）
         SysUser user = new SysUser();
         user.setUsername(dto.getUsername());
         user.setPassword(BCrypt.hashpw(dto.getPassword()));
@@ -174,7 +194,7 @@ public class UserServiceImpl implements UserService {
         user.setStudentNo(dto.getStudentNo());
         user.setPhone(dto.getPhone());
         user.setEmail(dto.getEmail());
-        user.setRole(Constants.ROLE_STUDENT);
+        user.setRole(regRole);
         user.setStatus(Constants.USER_STATUS_NORMAL);
         userMapper.insert(user);
     }
@@ -241,6 +261,89 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public void createUser(UserCreateDTO dto) {
+        if (StrUtil.isBlank(dto.getUsername()) || StrUtil.isBlank(dto.getName())) {
+            throw new BusinessException("请填写账号与姓名");
+        }
+        if (dto.getUsername().length() > 32) {
+            throw new BusinessException("账号长度不能超过 32 个字符");
+        }
+        if (dto.getName().length() > 20) {
+            throw new BusinessException("姓名长度不能超过 20 个字符");
+        }
+        // 角色必须为已知取值，避免越界值写入数据库
+        if (dto.getRole() == null || (dto.getRole() != Constants.ROLE_STUDENT
+                && dto.getRole() != Constants.ROLE_ADMIN && dto.getRole() != Constants.ROLE_TEACHER)) {
+            throw new BusinessException("角色参数不合法（0-学生，1-实验室管理员，2-教师）");
+        }
+        // 学号：学生必填，教师与管理员可为空（需求文档 V4.0 1.2）
+        if (dto.getRole() == Constants.ROLE_STUDENT && StrUtil.isBlank(dto.getStudentNo())) {
+            throw new BusinessException("学生角色必须填写学号");
+        }
+        if (StrUtil.isNotBlank(dto.getStudentNo()) && dto.getStudentNo().length() > 20) {
+            throw new BusinessException("学号长度不能超过 20 个字符");
+        }
+        if (StrUtil.isNotBlank(dto.getEmail()) && dto.getEmail().length() > 50) {
+            throw new BusinessException("邮箱长度不能超过 50 个字符");
+        }
+        if (StrUtil.isNotBlank(dto.getPhone()) && !dto.getPhone().matches("1\\d{10}")) {
+            throw new BusinessException("手机号格式不正确");
+        }
+        // 未填密码时使用系统默认密码，BCrypt 加密存储，库中无明文
+        String rawPassword = StrUtil.isBlank(dto.getPassword()) ? Constants.DEFAULT_PASSWORD : dto.getPassword();
+        if (rawPassword.length() < Constants.PASSWORD_MIN_LENGTH) {
+            throw new BusinessException("密码长度不能少于 6 位");
+        }
+        // 账号唯一性校验
+        Long count = userMapper.selectCount(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, dto.getUsername()));
+        if (count > 0) {
+            throw new BusinessException("该账号已存在，请更换账号");
+        }
+
+        SysUser user = new SysUser();
+        user.setUsername(dto.getUsername());
+        user.setPassword(BCrypt.hashpw(rawPassword));
+        user.setName(dto.getName());
+        user.setRole(dto.getRole());
+        user.setStudentNo(dto.getStudentNo());
+        user.setPhone(dto.getPhone());
+        user.setEmail(dto.getEmail());
+        user.setStatus(Constants.USER_STATUS_NORMAL);
+        userMapper.insert(user);
+    }
+
+    @Override
+    public void updateUserRole(Long id, Integer role) {
+        if (id == null) {
+            throw new BusinessException("用户 ID 不能为空");
+        }
+        if (role == null || (role != Constants.ROLE_STUDENT
+                && role != Constants.ROLE_ADMIN && role != Constants.ROLE_TEACHER)) {
+            throw new BusinessException("角色参数不合法（0-学生，1-实验室管理员，2-教师）");
+        }
+        SysUser user = userMapper.selectById(id);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        // 防护：不允许修改当前登录管理员自己的角色，避免把自己降权后系统无人可管
+        if (id.equals(UserContext.getUserId())) {
+            throw new BusinessException("不允许修改当前登录管理员自己的角色");
+        }
+        // 目标角色与当前角色一致时直接返回（幂等）
+        if (user.getRole() != null && user.getRole().equals(role)) {
+            return;
+        }
+        SysUser update = new SysUser();
+        update.setId(id);
+        update.setRole(role);
+        userMapper.updateById(update);
+        // 角色校验读的是 Token 内的 role 声明，改库后旧 Token 仍按旧角色放行，
+        // 故失效用户状态缓存并提示重新登录后新角色才生效
+        redisCache.removeUserStatus(id);
+    }
+
+    @Override
     public void resetPassword(Long id) {
         if (id == null) {
             throw new BusinessException("用户 ID 不能为空");
@@ -288,6 +391,10 @@ public class UserServiceImpl implements UserService {
         Double rate = (approved + rejected) == 0
                 ? 0.0
                 : Math.round(approved * 1000.0 / (approved + rejected)) / 10.0;
+        // 实际使用次数：usage_record 中「正常使用/部分使用」的记录数（失约不计入实际使用）
+        Long actualUseCount = usageRecordMapper.selectCount(new LambdaQueryWrapper<UsageRecord>()
+                .eq(UsageRecord::getUserId, userId)
+                .in(UsageRecord::getUseStatus, Constants.USE_STATUS_NORMAL, Constants.USE_STATUS_PARTIAL));
         // 最近一次预约时间：按创建时间取最新一条（无记录为 null）
         Reservation last = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
                 .eq(Reservation::getUserId, userId)
@@ -298,6 +405,7 @@ public class UserServiceImpl implements UserService {
         vo.setTotalReservations(total);
         vo.setMonthReservations(monthCount);
         vo.setApprovalRate(rate);
+        vo.setActualUseCount(actualUseCount);
         vo.setLastReservationTime(last == null ? null : last.getCreateTime());
         return vo;
     }

@@ -16,11 +16,15 @@ import com.example.reservation.dto.AuditDTO;
 import com.example.reservation.dto.BatchAuditDTO;
 import com.example.reservation.dto.ReservationDTO;
 import com.example.reservation.entity.Classroom;
+import com.example.reservation.entity.LabOpenSlot;
 import com.example.reservation.entity.Reservation;
 import com.example.reservation.entity.SysUser;
 import com.example.reservation.mapper.ClassroomMapper;
 import com.example.reservation.mapper.ReservationMapper;
+import com.example.reservation.entity.UsageRecord;
 import com.example.reservation.mapper.SysUserMapper;
+import com.example.reservation.mapper.UsageRecordMapper;
+import com.example.reservation.service.LabOpenSlotService;
 import com.example.reservation.service.ReservationService;
 import com.example.reservation.vo.CalendarVO;
 import com.example.reservation.vo.ConflictVO;
@@ -79,6 +83,14 @@ public class ReservationServiceImpl implements ReservationService {
     @Resource
     private ReservationConverter reservationConverter;
 
+    /** 开放时段服务（规则 2 容量控制 + 规则 3 时段约束） */
+    @Resource
+    private LabOpenSlotService labOpenSlotService;
+
+    /** 使用记录 Mapper：取消预约时级联清理已登记的使用记录 */
+    @Resource
+    private UsageRecordMapper usageRecordMapper;
+
     @Override
     public ConflictVO checkConflict(Long classroomId, String date, String startTime, String endTime) {
         // 参数校验：教室存在性 + 日期/时间格式
@@ -98,7 +110,96 @@ public class ReservationServiceImpl implements ReservationService {
         if (!start.isBefore(end)) {
             throw new BusinessException("开始时间必须早于结束时间");
         }
-        return detectConflict(classroomId, reserveDate, start, end);
+        ConflictVO conflict = detectConflict(classroomId, reserveDate, start, end);
+        // 规则 2/3：即使时间不冲突，也需回带开放时段与容量信息，供前端实时提示
+        fillSlotInfo(conflict, classroomId, reserveDate, start, end);
+        return conflict;
+    }
+
+    /**
+     * 为冲突检测结果补充开放时段与容量信息（学生端实时校验展示用）
+     * <p>
+     * 时段不合法或容量不足时把 conflict 置为 true 并给出原因，让前端在提交前就能看到问题；
+     * 此处不抛异常，避免实时校验接口因正常业务判断而产生错误响应。
+     */
+    private void fillSlotInfo(ConflictVO conflict, Long classroomId, LocalDate reserveDate,
+                              LocalTime start, LocalTime end) {
+        try {
+            LabOpenSlot slot = labOpenSlotService.requireEffectiveSlot(classroomId, reserveDate, start, end);
+            int capacityLimit = slot.getSlotCapacity() == null
+                    ? labOpenSlotService.resolveCapacityLimit(classroomId, reserveDate, start, end)
+                    : slot.getSlotCapacity();
+            conflict.setCapacityLimit(capacityLimit);
+            conflict.setApprovedPeople(sumApprovedPeople(classroomId, reserveDate, start, end));
+        } catch (BusinessException e) {
+            // 未开放或时间不在任何时段窗口内：直接标记为不可预约
+            conflict.setConflict(true);
+            conflict.setReason(e.getMessage());
+        }
+    }
+
+    /**
+     * 统计某教室某日期某开放时段内【已通过】预约的人数总和
+     * <p>
+     * 与 requireCapacity 同口径（需求文档 1.4 规则 2）：按「同一开放时段」累计，
+     * 使前端展示的剩余容量与后端拦截阈值完全一致，避免前端显示"可约"而后端报超限。
+     * 只统计已通过(1)，失约记录不影响容量释放。
+     */
+    private int sumApprovedPeople(Long classroomId, LocalDate date, LocalTime start, LocalTime end) {
+        List<LabOpenSlot> windows = labOpenSlotService.listEffectiveSlotEntities(classroomId, date);
+        int total = 0;
+        for (Reservation r : listApprovedByClassAndDate(classroomId, date)) {
+            if (occupiesSameWindow(windows, r.getStartTime(), r.getEndTime())) {
+                total += r.getPeopleCount() == null ? 1 : r.getPeopleCount();
+            }
+        }
+        return total;
+    }
+
+    /**
+     * 规则 2 容量校验：该时段已通过预约人数之和 + 本次人数 不得超过时段人数上限
+     * <p>
+     * 统计口径（需求文档 1.4 规则 2）：按【同一开放时段】累计，而非按时间重叠累计。
+     * 早期实现只累加与本次时间重叠的已通过预约，但时间重叠已在规则 1 冲突检测中被整段拒绝，
+     * 导致本方法恒不触发（空转）。现改为累加「占用该开放时段窗口的已通过预约」人数之和，
+     * 与需求文档「该时段已通过人数之和」措辞一致，容量控制因此真实生效。
+     *
+     * @throws BusinessException 超出容量时抛出，消息直接面向用户
+     */
+    private void requireCapacity(Long classroomId, LocalDate date, LocalTime start, LocalTime end,
+                                 int peopleCount, Long excludeReservationId) {
+        int limit = labOpenSlotService.resolveCapacityLimit(classroomId, date, start, end);
+        // 命中窗口：本次预约所属的开放时段（可能有多条时段，取与本次窗口重叠者）
+        List<LabOpenSlot> windows = labOpenSlotService.listEffectiveSlotEntities(classroomId, date);
+        int used = 0;
+        for (Reservation r : listApprovedByClassAndDate(classroomId, date)) {
+            if (excludeReservationId != null && excludeReservationId.equals(r.getId())) {
+                continue;
+            }
+            // 占用同一开放时段窗口即计入容量（时段内时间不重叠的相邻预约同样占人）
+            if (occupiesSameWindow(windows, r.getStartTime(), r.getEndTime())) {
+                used += r.getPeopleCount() == null ? 1 : r.getPeopleCount();
+            }
+        }
+        if (used + peopleCount > limit) {
+            throw new BusinessException("该时段预约人数已达上限（上限 " + limit + " 人，已占用 " + used
+                    + " 人，本次 " + peopleCount + " 人），请减少人数或更换时段");
+        }
+    }
+
+    /**
+     * 判断某已通过预约是否落在与本次相同的开放时段窗口内
+     * <p>
+     * 时段窗口之间互不重叠（时段模块创建时即校验），故「与任一窗口重叠」等价于「占用该窗口」。
+     * 无生效时段时返回 false，容量回落为教室容量且不与他段互相挤占。
+     */
+    private boolean occupiesSameWindow(List<LabOpenSlot> windows, LocalTime start, LocalTime end) {
+        for (LabOpenSlot slot : windows) {
+            if (start.isBefore(slot.getCloseTime()) && end.isAfter(slot.getOpenTime())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -160,8 +261,13 @@ public class ReservationServiceImpl implements ReservationService {
                     + "-" + TimeUtil.formatTime(Constants.DAILY_SLOT_END));
         }
         // H3 修复：单次预约时长上限（防止单条记录占满全天，答辩口径：防恶意占满资源）
-        if (ChronoUnit.MINUTES.between(start, end) > Constants.MAX_RESERVATION_HOURS * 60L) {
-            throw new BusinessException("单次预约时长不能超过 " + Constants.MAX_RESERVATION_HOURS + " 小时");
+        // 教师角色（2）享有更长的单次预约时长：学生 8 小时、教师覆盖整个开放窗口。
+        // 这是「学生/教师/管理员」三角色在业务能力上的可验证差异（需求文档 1.2 多角色权限）。
+        boolean teacher = UserContext.isTeacher();
+        long maxHours = teacher ? Constants.TEACHER_MAX_RESERVATION_HOURS : Constants.MAX_RESERVATION_HOURS;
+        if (ChronoUnit.MINUTES.between(start, end) > maxHours * 60L) {
+            throw new BusinessException("单次预约时长不能超过 " + maxHours + " 小时"
+                    + (teacher ? "" : "（教师可申请更长时段）"));
         }
         // 禁止预约过去日期（与前端 disabled-date 口径一致：允许今天及以后，后端强制兜底）
         if (reserveDate.isBefore(LocalDate.now())) {
@@ -172,12 +278,26 @@ public class ReservationServiceImpl implements ReservationService {
             throw new BusinessException("预约开始时间必须晚于当前时间");
         }
 
+        // 规则 2：预约人数校验（缺省按 1 人处理，至少 1 人且不超过实验室容量）
+        int peopleCount = dto.getPeopleCount() == null ? 1 : dto.getPeopleCount();
+        if (peopleCount < 1) {
+            throw new BusinessException("预约人数至少为 1 人");
+        }
+        if (room.getCapacity() != null && peopleCount > room.getCapacity()) {
+            throw new BusinessException("预约人数不能超过实验室容量（" + room.getCapacity() + " 人）");
+        }
+        // 规则 3：开放时段约束——日期须在开放区间与开放星期内，时间须完整落在某个窗口内且不跨窗口。
+        // 必须在教室行 FOR UPDATE 之后执行，保证"时段校验 + 容量校验 + 插入"在同一串行化区间内完成
+        labOpenSlotService.requireEffectiveSlot(dto.getClassroomId(), reserveDate, start, end);
+
         // 后端二次冲突检测（强制兜底：绕过前端直接调用本接口仍会被拒绝）
         // 直接复用上方已解析的日期/时间与已加载教室，不再走 checkConflict 的重复参数校验与教室查库
         ConflictVO conflict = detectConflict(dto.getClassroomId(), reserveDate, start, end);
         if (Boolean.TRUE.equals(conflict.getConflict())) {
             throw new BusinessException(conflict.getReason());
         }
+        // 规则 2：容量校验（已通过人数之和 + 本次人数 ≤ 时段上限），锁内复查杜绝并发超额
+        requireCapacity(dto.getClassroomId(), reserveDate, start, end, peopleCount, null);
 
         // 插入预约，初始状态：待审核(0)
         Reservation reservation = new Reservation();
@@ -186,6 +306,7 @@ public class ReservationServiceImpl implements ReservationService {
         reservation.setReserveDate(reserveDate);
         reservation.setStartTime(start);
         reservation.setEndTime(end);
+        reservation.setPeopleCount(peopleCount);
         reservation.setPurpose(purpose);
         reservation.setStatus(Constants.RES_STATUS_PENDING);
         reservationMapper.insert(reservation);
@@ -212,9 +333,16 @@ public class ReservationServiceImpl implements ReservationService {
     }
 
     @Override
-    public void cancelReservation(Long id) {
+    public void cancelReservation(Long id, String reason) {
         if (id == null) {
             throw new BusinessException("预约 ID 不能为空");
+        }
+        String cancelReason = reason == null ? "" : reason.trim();
+        if (cancelReason.isEmpty()) {
+            throw new BusinessException("请填写取消原因");
+        }
+        if (cancelReason.length() > 255) {
+            throw new BusinessException("取消原因不能超过 255 字");
         }
         Reservation reservation = reservationMapper.selectById(id);
         if (reservation == null) {
@@ -242,11 +370,16 @@ public class ReservationServiceImpl implements ReservationService {
                 .eq(Reservation::getId, id)
                 .and(w -> w.eq(Reservation::getStatus, Constants.RES_STATUS_PENDING)
                         .or().eq(Reservation::getStatus, Constants.RES_STATUS_APPROVED))
-                .set(Reservation::getStatus, Constants.RES_STATUS_CANCELED);
+                .set(Reservation::getStatus, Constants.RES_STATUS_CANCELED)
+                .set(Reservation::getCancelReason, cancelReason)
+                .set(Reservation::getCancelTime, LocalDateTime.now());
         int updated = reservationMapper.update(null, cancelWrapper);
         if (updated != 1) {
             throw new BusinessException("预约状态已变更，请刷新后重试");
         }
+        // V4.0：已登记使用记录的预约被取消时，级联删除使用记录，
+        // 避免「已取消」的预约仍计入实际使用统计（数据口径一致性）
+        usageRecordMapper.delete(new LambdaQueryWrapper<UsageRecord>().eq(UsageRecord::getReservationId, id));
         // 缓存一致性：取消预约影响看板与教室今日占用，失效相关缓存
         redisCache.invalidateBusinessCaches();
     }
@@ -254,22 +387,27 @@ public class ReservationServiceImpl implements ReservationService {
     @Override
     public PageResult<ReservationManageVO> pageManage(long page, long size, Integer status,
                                                       String startDate, String endDate, String keyword,
-                                                      Long classroomId) {
+                                                      Long classroomId, Integer useStatus) {
         validatePage(page, size);
         validateFilters(status, startDate, endDate, classroomId);
-        LambdaQueryWrapper<Reservation> wrapper = buildManageWrapper(status, startDate, endDate, keyword, classroomId);
+        validateUseStatus(useStatus);
+        LambdaQueryWrapper<Reservation> wrapper = buildManageWrapper(status, startDate, endDate, keyword, classroomId,
+                useStatus);
         Page<Reservation> result = reservationMapper.selectPage(new Page<>(page, size), wrapper);
-        // 实体 → 管理端 VO（批量预查用户 + 教室信息，避免逐行 selectById 造成 N+1 查询）
+        // 实体 → 管理端 VO（批量预查用户 + 教室 + 使用记录信息，避免逐行 selectById 造成 N+1 查询）
         Map<Long, SysUser> userMap = reservationConverter.batchUserMap(result.getRecords());
         Map<Long, Classroom> roomMap = reservationConverter.batchClassroomMap(result.getRecords());
-        return PageResult.of(result, r -> reservationConverter.toManageVO(r, userMap, roomMap));
+        Map<Long, UsageRecord> usageMap = reservationConverter.batchUsageMap(result.getRecords());
+        return PageResult.of(result, r -> reservationConverter.toManageVO(r, userMap, roomMap, usageMap));
     }
 
     @Override
     public List<ReservationExportVO> listExport(Integer status, String startDate, String endDate,
-                                                String keyword, Long classroomId) {
+                                                String keyword, Long classroomId, Integer useStatus) {
         validateFilters(status, startDate, endDate, classroomId);
-        LambdaQueryWrapper<Reservation> wrapper = buildManageWrapper(status, startDate, endDate, keyword, classroomId);
+        validateUseStatus(useStatus);
+        LambdaQueryWrapper<Reservation> wrapper = buildManageWrapper(status, startDate, endDate, keyword, classroomId,
+                useStatus);
         // 导出上限保护：最多导出 MAX_EXPORT_ROWS 条，超出提示缩小筛选范围（防全量导出拖垮内存/响应）
         Page<Reservation> page = reservationMapper.selectPage(new Page<>(1, MAX_EXPORT_ROWS + 1), wrapper);
         if (page.getTotal() > MAX_EXPORT_ROWS) {
@@ -279,7 +417,9 @@ public class ReservationServiceImpl implements ReservationService {
         // 批量预查用户 + 教室信息（避免逐行 selectById 造成 N+1 查询）
         Map<Long, SysUser> userMap = reservationConverter.batchUserMap(list);
         Map<Long, Classroom> roomMap = reservationConverter.batchClassroomMap(list);
-        return list.stream().map(r -> reservationConverter.toExportVO(r, userMap, roomMap)).collect(Collectors.toList());
+        Map<Long, UsageRecord> usageMap = reservationConverter.batchUsageMap(list);
+        return list.stream().map(r -> reservationConverter.toExportVO(r, userMap, roomMap, usageMap))
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -318,6 +458,11 @@ public class ReservationServiceImpl implements ReservationService {
                             + "-" + TimeUtil.formatTime(r.getEndTime()) + "」时间冲突，不能通过");
                 }
             }
+            // 规则 2：容量复查——提交时未超不代表审核通过时未超（其间可能有其他预约被通过），
+            // 必须在教室行 FOR UPDATE 锁内、条件更新之前复查，排除本条自身占用
+            requireCapacity(reservation.getClassroomId(), reservation.getReserveDate(),
+                    reservation.getStartTime(), reservation.getEndTime(),
+                    reservation.getPeopleCount() == null ? 1 : reservation.getPeopleCount(), reservation.getId());
         }
 
         // M1 修复：条件更新 + 影响行数校验（UPDATE ... SET status=? WHERE id=? AND status=0），
@@ -386,6 +531,46 @@ public class ReservationServiceImpl implements ReservationService {
                     }
                 }
             }
+            // 规则 2 批内容量校验：同批待通过记录若时间重叠，需按（教室, 日期, 时间段）累计人数后与上限比对，
+            // 逐条独立校验会漏判"两条各自不超、加起来超额"的情况
+            Map<Long, Map<LocalDate, List<Reservation>>> byClassDateForCapacity = pendingTargets.stream()
+                    .collect(Collectors.groupingBy(Reservation::getClassroomId,
+                            Collectors.groupingBy(Reservation::getReserveDate)));
+            for (Map.Entry<Long, Map<LocalDate, List<Reservation>>> classEntry : byClassDateForCapacity.entrySet()) {
+                for (Map.Entry<LocalDate, List<Reservation>> dateEntry : classEntry.getValue().entrySet()) {
+                    List<Reservation> group = dateEntry.getValue();
+                    Set<LocalTime> boundaries = new java.util.TreeSet<>();
+                    group.forEach(r -> {
+                        boundaries.add(r.getStartTime());
+                        boundaries.add(r.getEndTime());
+                    });
+                    // 以每条记录的时间边界为切分点，逐段累计该段内的待通过人数与已通过人数
+                    List<LocalTime> points = new ArrayList<>(boundaries);
+                    for (int i = 0; i < points.size(); i++) {
+                        for (int j = i + 1; j < points.size(); j++) {
+                            LocalTime segStart = points.get(i);
+                            LocalTime segEnd = points.get(j);
+                            int pendingPeople = 0;
+                            for (Reservation r : group) {
+                                if (!r.getStartTime().isAfter(segStart) && !r.getEndTime().isBefore(segEnd)) {
+                                    pendingPeople += r.getPeopleCount() == null ? 1 : r.getPeopleCount();
+                                }
+                            }
+                            if (pendingPeople == 0) {
+                                continue;
+                            }
+                            int approvedPeople = sumApprovedPeople(classEntry.getKey(), dateEntry.getKey(), segStart, segEnd);
+                            int limit = labOpenSlotService.resolveCapacityLimit(
+                                    classEntry.getKey(), dateEntry.getKey(), segStart, segEnd);
+                            if (approvedPeople + pendingPeople > limit) {
+                                throw new BusinessException("批量审核失败：" + segStart + "-" + segEnd
+                                        + " 时段人数将达 " + (approvedPeople + pendingPeople) + " 人，超过该时段上限 "
+                                        + limit + " 人，请单独处理");
+                            }
+                        }
+                    }
+                }
+            }
             for (Reservation r : pendingTargets) {
                 // H2 修复：复审已通过列表改用【加锁读】（读最新已提交），闭合"快照读早于加锁"的并发缺口
                 List<Reservation> approved = listApprovedByClassAndDateForUpdate(r.getClassroomId(), r.getReserveDate());
@@ -397,6 +582,9 @@ public class ReservationServiceImpl implements ReservationService {
                                 + "-" + TimeUtil.formatTime(ap.getEndTime()) + "」时间冲突，请单独处理");
                     }
                 }
+                // 规则 2：逐条容量复查（与库中已通过预约比对），批内互相叠加的情形由上方分段校验覆盖
+                requireCapacity(r.getClassroomId(), r.getReserveDate(), r.getStartTime(), r.getEndTime(),
+                        r.getPeopleCount() == null ? 1 : r.getPeopleCount(), r.getId());
             }
         }
         // 批量更新：仅【待审核(0)】记录可参与，返回实际更新条数
@@ -521,9 +709,23 @@ public class ReservationServiceImpl implements ReservationService {
         }
     }
 
-    /** 构建管理端查询/导出共用筛选条件（状态/日期范围/教室/关键词），按创建时间倒序 */
+    /** 失约标记筛选：0-未登记（尚无使用记录），1-正常使用，2-部分使用，3-失约（与 Constants.USE_STATUS_* 对齐） */
+    private static final int USE_STATUS_UNREGISTERED = 0;
+
+    /** 使用记录子查询（失约标记筛选复用，避免同一段 SQL 重复拼接） */
+    private static final String USAGE_RESERVATION_ID_SQL = "SELECT reservation_id FROM usage_record";
+
+    /** 校验失约标记筛选参数：仅允许 0-未登记 / 1-正常使用 / 2-部分使用 / 3-失约 */
+    private void validateUseStatus(Integer useStatus) {
+        if (useStatus != null
+                && (useStatus < USE_STATUS_UNREGISTERED || useStatus > Constants.USE_STATUS_NO_SHOW)) {
+            throw new BusinessException("失约标记参数不合法");
+        }
+    }
+
+    /** 构建管理端查询/导出共用筛选条件（状态/日期范围/教室/关键词/失约标记），按创建时间倒序 */
     private LambdaQueryWrapper<Reservation> buildManageWrapper(Integer status, String startDate, String endDate,
-                                                               String keyword, Long classroomId) {
+                                                               String keyword, Long classroomId, Integer useStatus) {
         LocalDate start = reservationConverter.parseDateOrNull(startDate);
         LocalDate end = reservationConverter.parseDateOrNull(endDate);
 
@@ -551,7 +753,7 @@ public class ReservationServiceImpl implements ReservationService {
             keywordClassroomIds = null;
         }
 
-        return new LambdaQueryWrapper<Reservation>()
+        LambdaQueryWrapper<Reservation> wrapper = new LambdaQueryWrapper<Reservation>()
                 .eq(status != null, Reservation::getStatus, status)
                 // R6：预约记录页「教室」筛选（可选参数，缺省全部教室）
                 .eq(classroomId != null, Reservation::getClassroomId, classroomId)
@@ -568,6 +770,16 @@ public class ReservationServiceImpl implements ReservationService {
                     }
                 })
                 .orderByDesc(Reservation::getCreateTime);
+        // V4.0 失约标记筛选（需求文档 2.4 第 14 页「多条件筛选含失约标记」）：
+        // 1/2/3 命中 usage_record 中对应 use_status 的预约；0 表示尚未登记，用 NOT IN 排除已登记预约
+        if (useStatus != null) {
+            if (useStatus == USE_STATUS_UNREGISTERED) {
+                wrapper.notInSql(Reservation::getId, USAGE_RESERVATION_ID_SQL);
+            } else {
+                wrapper.inSql(Reservation::getId, USAGE_RESERVATION_ID_SQL + " WHERE use_status = " + useStatus);
+            }
+        }
+        return wrapper;
     }
 
     /** 查询某教室某日期【已通过】预约（冲突检测/时段占用共用） */

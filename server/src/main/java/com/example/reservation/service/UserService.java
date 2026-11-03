@@ -4,7 +4,9 @@ import com.example.reservation.common.PageResult;
 import com.example.reservation.dto.LoginDTO;
 import com.example.reservation.dto.PasswordDTO;
 import com.example.reservation.dto.RegisterDTO;
+import com.example.reservation.dto.UserCreateDTO;
 import com.example.reservation.dto.UserInfoDTO;
+import com.example.reservation.dto.UserRoleDTO;
 import com.example.reservation.vo.LoginVO;
 import com.example.reservation.vo.UserStatsVO;
 import com.example.reservation.vo.UserVO;
@@ -52,6 +54,17 @@ public interface UserService {
      * 管理员：重置用户密码为默认密码（BCrypt 存储；禁止操作当前登录管理员自己）
      */
     void resetPassword(Long id);
+
+    /**
+     * 管理员：新建用户（需求文档 V4.0 1.2，教师账号由管理员创建）
+     * 学生角色必须填学号；未填密码时使用默认密码 123456（BCrypt 存储）
+     */
+    void createUser(UserCreateDTO dto);
+
+    /**
+     * 管理员：修改用户角色（需求文档 V4.0 1.2；禁止修改当前登录管理员自己的角色）
+     */
+    void updateUserRole(Long id, Integer role);
 
     /**
      * 个人预约数据统计（R4 个人中心）：累计预约次数 / 本月预约数 / 审核通过率 / 最近一次预约时间

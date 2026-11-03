@@ -5,7 +5,9 @@ import com.example.reservation.common.Result;
 import com.example.reservation.dto.LoginDTO;
 import com.example.reservation.dto.PasswordDTO;
 import com.example.reservation.dto.RegisterDTO;
+import com.example.reservation.dto.UserCreateDTO;
 import com.example.reservation.dto.UserInfoDTO;
+import com.example.reservation.dto.UserRoleDTO;
 import com.example.reservation.dto.UserStatusDTO;
 import com.example.reservation.service.UserService;
 import com.example.reservation.vo.LoginVO;
@@ -139,5 +141,26 @@ public class UserController {
     public Result<Void> resetPassword(@PathVariable Long id) {
         userService.resetPassword(id);
         return Result.<Void>success("密码已重置为默认密码", null);
+    }
+
+    /**
+     * 管理端：新建用户（需求文档 V4.0 1.2，教师账号由管理员创建）
+     * 学生角色必须填学号；未填密码时使用默认密码 123456
+     */
+    @Operation(summary = "用户管理-新建用户", description = "角色 0-学生 / 1-实验室管理员 / 2-教师；学生必填学号；密码不填则用默认 123456")
+    @PostMapping("/manage")
+    public Result<Void> createUser(@RequestBody UserCreateDTO dto) {
+        userService.createUser(dto);
+        return Result.<Void>success("用户创建成功", null);
+    }
+
+    /**
+     * 管理端：修改用户角色（需求文档 V4.0 1.2；禁止修改当前登录管理员自己）
+     */
+    @Operation(summary = "用户管理-修改角色", description = "role：0-学生，1-实验室管理员，2-教师；禁止修改自己")
+    @PutMapping("/manage/{id}/role")
+    public Result<Void> updateUserRole(@PathVariable Long id, @RequestBody UserRoleDTO dto) {
+        userService.updateUserRole(id, dto.getRole());
+        return Result.<Void>success("角色修改成功", null);
     }
 }

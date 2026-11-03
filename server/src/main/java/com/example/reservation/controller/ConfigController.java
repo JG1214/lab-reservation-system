@@ -3,6 +3,7 @@ package com.example.reservation.controller;
 import com.example.reservation.common.Constants;
 import com.example.reservation.common.Result;
 import com.example.reservation.common.TimeUtil;
+import com.example.reservation.common.UserContext;
 import com.example.reservation.vo.BookingRulesVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,9 +33,14 @@ public class ConfigController {
     @Operation(summary = "预约规则", description = "可预约时段窗口（HH:mm）与单次预约最长时长（小时），供前端实时校验与提示文案使用")
     @GetMapping("/booking-rules")
     public Result<BookingRulesVO> bookingRules() {
+        // 单次时长上限按当前登录角色下发：教师可用更长时段（Constants.TEACHER_MAX_RESERVATION_HOURS），
+        // 保证前端实时校验与后端二次校验同一口径，不会出现前端拦下教师合法预约的情况
+        int maxHours = UserContext.isTeacher()
+                ? Constants.TEACHER_MAX_RESERVATION_HOURS
+                : Constants.MAX_RESERVATION_HOURS;
         return Result.success(new BookingRulesVO(
                 TimeUtil.formatTime(Constants.DAILY_SLOT_START),
                 TimeUtil.formatTime(Constants.DAILY_SLOT_END),
-                Constants.MAX_RESERVATION_HOURS));
+                maxHours));
     }
 }

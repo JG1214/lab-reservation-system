@@ -19,4 +19,16 @@ public class ConflictVO {
 
     /** 冲突原因（不冲突时为可预约提示） */
     private String reason;
+
+    /** 该时段人数上限（来自开放时段 slotCapacity，缺省回落到实验室容量） */
+    private Integer capacityLimit;
+
+    /** 该时段已被【已通过】预约占用的人数 */
+    private Integer approvedPeople;
+
+    /** 精简构造：仅冲突标记与原因 */
+    public ConflictVO(Boolean conflict, String reason) {
+        this.conflict = conflict;
+        this.reason = reason;
+    }
 }

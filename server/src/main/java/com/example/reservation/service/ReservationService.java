@@ -40,23 +40,29 @@ public interface ReservationService {
 
     /**
      * 取消预约：仅本人；待审核(0)/已通过(1) → 已取消(3)；
-     * 预约开始前 1 小时内禁止取消；已驳回/已取消不可再取消
+     * 预约开始前 1 小时内禁止取消；已驳回/已取消不可再取消。
+     * 取消原因必填并落库（cancel_reason / cancel_time），供取消与失约统计使用
+     *
+     * @param id     预约 ID
+     * @param reason 取消原因（必填，≤255 字）
      */
-    void cancelReservation(Long id);
+    void cancelReservation(Long id, String reason);
 
     /**
      * 管理员：全量预约查询（状态、日期范围、教室、关键词含用户账号/姓名/教室名称）
      * R6 新增 classroomId 可选参数（预约记录页「教室」筛选），缺省为全部教室
+     * V4.0 新增 useStatus 可选参数（失约标记筛选：0-未登记，1-正常使用，2-部分使用，3-失约）
      */
     PageResult<ReservationManageVO> pageManage(long page, long size, Integer status,
-                                               String startDate, String endDate, String keyword, Long classroomId);
+                                               String startDate, String endDate, String keyword, Long classroomId,
+                                               Integer useStatus);
 
     /**
      * 管理员：预约记录导出（R6 预约记录页 Excel 导出，需求文档 2.4 第 12 页）
-     * 与 pageManage 相同的筛选口径（状态/日期范围/教室/关键词），返回全部命中记录（按创建时间倒序）
+     * 与 pageManage 相同的筛选口径（状态/日期范围/教室/关键词/失约标记），返回全部命中记录（按创建时间倒序）
      */
     List<ReservationExportVO> listExport(Integer status, String startDate, String endDate,
-                                         String keyword, Long classroomId);
+                                         String keyword, Long classroomId, Integer useStatus);
 
     /**
      * 审核：仅待审核(0)可审核；通过 → 已通过(1)，驳回 → 已驳回(2) 且必填审核备注；

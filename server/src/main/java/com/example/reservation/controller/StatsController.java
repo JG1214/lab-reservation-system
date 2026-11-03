@@ -2,6 +2,7 @@ package com.example.reservation.controller;
 
 import com.example.reservation.common.Result;
 import com.example.reservation.service.StatsService;
+import com.example.reservation.vo.ActualUsageVO;
 import com.example.reservation.vo.OverviewVO;
 import com.example.reservation.vo.TimeDistributionVO;
 import com.example.reservation.vo.TrendVO;
@@ -23,7 +24,7 @@ import java.util.List;
  *
  * @author reservation-team
  */
-@Tag(name = "统计模块", description = "数据看板：教室使用率排行 / 月度预约趋势 / 热门时段分布（管理员）")
+@Tag(name = "统计模块", description = "数据看板：教室使用率排行 / 实际使用统计 / 月度预约趋势 / 热门时段分布（管理员）")
 @RestController
 @RequestMapping("/api/stats")
 public class StatsController {
@@ -49,6 +50,17 @@ public class StatsController {
     public Result<List<UsageRateVO>> usageRate(@RequestParam(required = false) String startDate,
                                                @RequestParam(required = false) String endDate) {
         return Result.success(statsService.usageRate(startDate, endDate));
+    }
+
+    /**
+     * 实际使用统计（需求设计文档 V4.0 1.3 管理端「数据统计」第 4 项）
+     * 与使用率排行并列：使用率看「排期被占用多少」，本接口看「真实被使用多少、失约多少」
+     */
+    @Operation(summary = "统计-实际使用统计", description = "按教室汇总已登记使用记录：应到/正常/部分/失约条数、实际人数、实际使用小时数、实际使用率与失约率")
+    @GetMapping("/actual-usage")
+    public Result<List<ActualUsageVO>> actualUsage(@RequestParam(required = false) String startDate,
+                                                   @RequestParam(required = false) String endDate) {
+        return Result.success(statsService.actualUsage(startDate, endDate));
     }
 
     /**

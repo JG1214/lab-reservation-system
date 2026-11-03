@@ -34,4 +34,7 @@ public class ClassroomDTO {
 
     /** 备注描述（选填） */
     private String description;
+
+    /** 开放要求（选填，≤255 字）：如穿实验服、须指导教师在场、禁止饮食等 */
+    private String openRequirement;
 }

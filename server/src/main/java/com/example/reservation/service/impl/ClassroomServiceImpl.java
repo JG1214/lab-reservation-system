@@ -15,12 +15,14 @@ import com.example.reservation.config.RedisCache;
 import com.example.reservation.config.RedisProperties;
 import com.example.reservation.dto.ClassroomDTO;
 import com.example.reservation.entity.Classroom;
+import com.example.reservation.entity.LabOpenSlot;
 import com.example.reservation.entity.Reservation;
 import com.example.reservation.entity.UserFavorite;
 import com.example.reservation.mapper.ClassroomMapper;
 import com.example.reservation.mapper.ReservationMapper;
 import com.example.reservation.mapper.UserFavoriteMapper;
 import com.example.reservation.service.ClassroomService;
+import com.example.reservation.service.LabOpenSlotService;
 import com.example.reservation.vo.ClassroomVO;
 import com.example.reservation.vo.OccupiedSlotVO;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -30,10 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -59,6 +59,9 @@ public class ClassroomServiceImpl implements ClassroomService {
 
     @Resource
     private RedisProperties redisProperties;
+
+    @Resource
+    private LabOpenSlotService labOpenSlotService;
 
     @Override
     public PageResult<Classroom> pageClassrooms(long page, long size, String keyword, String building, Integer type, Integer status) {
@@ -90,6 +93,7 @@ public class ClassroomServiceImpl implements ClassroomService {
         classroom.setCapacity(dto.getCapacity());
         classroom.setEquipment(dto.getEquipment());
         classroom.setDescription(dto.getDescription());
+        classroom.setOpenRequirement(dto.getOpenRequirement());
         // 新增默认可用状态
         classroom.setStatus(Constants.CLASSROOM_STATUS_ENABLED);
         classroomMapper.insert(classroom);
@@ -115,6 +119,7 @@ public class ClassroomServiceImpl implements ClassroomService {
         classroom.setCapacity(dto.getCapacity());
         classroom.setEquipment(dto.getEquipment());
         classroom.setDescription(dto.getDescription());
+        classroom.setOpenRequirement(dto.getOpenRequirement());
         classroomMapper.updateById(classroom);
         // 缓存一致性：教室基础数据变更，失效看板 + 教室列表缓存
         redisCache.invalidateBusinessCaches();
@@ -227,6 +232,9 @@ public class ClassroomServiceImpl implements ClassroomService {
                         .in(Reservation::getClassroomId, ids)
                         .eq(Reservation::getReserveDate, LocalDate.now())
                         .eq(Reservation::getStatus, Constants.RES_STATUS_APPROVED));
+        // 今日生效开放时段：今日剩余可约人数的容量来源，与详情页 listEffectiveSlots 同源（单次查库，避免逐教室 N+1）
+        Map<Long, List<LabOpenSlot>> todaySlots =
+                labOpenSlotService.listEffectiveSlotEntities(ids, LocalDate.now());
         // 指定日期占用时段（仅当传入 date 时查询返回）
         final Map<Long, List<OccupiedSlotVO>> occupiedMap;
         if (queryDate != null && !ids.isEmpty()) {
@@ -247,7 +255,7 @@ public class ClassroomServiceImpl implements ClassroomService {
         List<ClassroomVO> vos = result.getRecords().stream().map(c -> {
             ClassroomVO vo = toStudentVO(c);
             vo.setStatusLabel(calcStatusLabel(c.getId(), todayApproved));
-            vo.setTodayRemainingSlots(calcRemainingSlots(c.getId(), todayApproved));
+            vo.setTodayRemainingPeople(calcRemainingPeople(c.getId(), todayApproved, todaySlots));
             vo.setOccupiedSlots(occupiedMap.getOrDefault(c.getId(), List.of()));
             return vo;
         }).toList();
@@ -303,6 +311,7 @@ public class ClassroomServiceImpl implements ClassroomService {
         vo.setCapacity(c.getCapacity());
         vo.setEquipment(c.getEquipment());
         vo.setDescription(c.getDescription());
+        vo.setOpenRequirement(c.getOpenRequirement());
         vo.setStatus(c.getStatus());
         return vo;
     }
@@ -334,28 +343,37 @@ public class ClassroomServiceImpl implements ClassroomService {
     }
 
     /**
-     * 今日剩余可预约整点时段数（需求文档 1.3 冲优项「今日剩余 X 时段」，负责人 2026-09-12 授权）：
-     * 08:00-22:00 按整点划分为 14 个时段；某时段与任一今日已通过预约重叠
-     * （R1 冲突检测公式：时段开始 < 预约结束 AND 时段结束 > 预约开始）即视为不可约；
-     * 剩余 = 14 - 不可约时段数。仅与「今天」绑定，与列表页日期筛选参数无关。
+     * 今日剩余可约人数（需求文档 V4.1 2.5 第 6 条，容量口径与教室详情页开放时段同源）：
+     * 按今日生效且尚未结束的开放时段逐个计算 max(0, slotCapacity − 该时段已通过预约人数) 后求和；
+     * 已结束的时段（closeTime ≤ 当前时刻）不再计入；无生效时段即无可约容量，返回 0。
+     * 仅与「今天」绑定，与列表页日期筛选参数无关。
      */
-    private int calcRemainingSlots(Long classroomId, List<Reservation> todayApproved) {
+    private int calcRemainingPeople(Long classroomId, List<Reservation> todayApproved,
+                                    Map<Long, List<LabOpenSlot>> todaySlots) {
+        List<LabOpenSlot> slots = todaySlots.getOrDefault(classroomId, List.of());
+        if (slots.isEmpty()) {
+            return 0;
+        }
         List<Reservation> mine = todayApproved.stream()
                 .filter(r -> r.getClassroomId().equals(classroomId))
                 .toList();
-        if (mine.isEmpty()) {
-            return Constants.DAILY_SLOT_END_HOUR - Constants.DAILY_SLOT_START_HOUR;
-        }
-        Set<Integer> occupied = new HashSet<>();
-        for (int i = Constants.DAILY_SLOT_START_HOUR; i < Constants.DAILY_SLOT_END_HOUR; i++) {
-            LocalTime slotStart = LocalTime.of(i, 0);
-            LocalTime slotEnd = LocalTime.of(i + 1, 0);
-            boolean busy = mine.stream().anyMatch(r -> r.getStartTime().isBefore(slotEnd) && r.getEndTime().isAfter(slotStart));
-            if (busy) {
-                occupied.add(i);
+        LocalTime now = LocalTime.now();
+        int remaining = 0;
+        for (LabOpenSlot slot : slots) {
+            // 已过时段不计入：时段结束时间不晚于当前时刻
+            if (!slot.getCloseTime().isAfter(now)) {
+                continue;
             }
+            int capacity = slot.getSlotCapacity() == null ? 0 : slot.getSlotCapacity();
+            // 该时段已通过预约人数：规则 3 保证预约完整落在窗口内，因此不会跨时段重复计入
+            int used = mine.stream()
+                    .filter(r -> !r.getStartTime().isBefore(slot.getOpenTime())
+                            && !r.getEndTime().isAfter(slot.getCloseTime()))
+                    .mapToInt(r -> r.getPeopleCount() == null ? 1 : r.getPeopleCount())
+                    .sum();
+            remaining += Math.max(0, capacity - used);
         }
-        return Constants.DAILY_SLOT_END_HOUR - Constants.DAILY_SLOT_START_HOUR - occupied.size();
+        return remaining;
     }
 
     /** 预约实体 → 占用时段 VO（时间统一 HH:mm）；详情路径（无缓存）按身份裁剪：
@@ -416,6 +434,10 @@ public class ClassroomServiceImpl implements ClassroomService {
         }
         if (dto.getCapacity() <= 0) {
             throw new BusinessException("教室容量必须大于 0");
+        }
+        // 开放要求为选填文本，超长直接拒绝（与 classroom.open_requirement VARCHAR(255) 对齐）
+        if (dto.getOpenRequirement() != null && dto.getOpenRequirement().length() > 255) {
+            throw new BusinessException("开放要求不能超过 255 个字符");
         }
     }
 }

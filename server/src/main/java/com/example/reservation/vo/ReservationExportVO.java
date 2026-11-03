@@ -57,6 +57,14 @@ public class ReservationExportVO {
     @ExcelProperty("状态")
     private String statusText;
 
+    /** 使用情况（正常使用/部分使用/失约；未登记时为「未登记」） */
+    @ExcelProperty("使用情况")
+    private String useStatusText;
+
+    /** 实际使用人数（来自 usage_record，未登记时为空） */
+    @ExcelProperty("实际使用人数")
+    private Integer actualPeople;
+
     /** 审核备注（驳回原因） */
     @ExcelProperty("审核备注")
     private String auditRemark;
@@ -64,6 +72,14 @@ public class ReservationExportVO {
     /** 审核时间（yyyy-MM-dd HH:mm:ss） */
     @ExcelProperty("审核时间")
     private String auditTime;
+
+    /** 取消原因（仅已取消记录有值） */
+    @ExcelProperty("取消原因")
+    private String cancelReason;
+
+    /** 取消时间（yyyy-MM-dd HH:mm:ss，仅已取消记录有值） */
+    @ExcelProperty("取消时间")
+    private String cancelTime;
 
     /** 创建时间（yyyy-MM-dd HH:mm:ss） */
     @ExcelProperty("创建时间")

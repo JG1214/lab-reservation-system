@@ -44,6 +44,9 @@ public class Classroom {
     /** 备注描述 */
     private String description;
 
+    /** 开放要求（如穿实验服、须指导教师在场、禁止饮食等准入门槛） */
+    private String openRequirement;
+
     /** 状态：0-停用，1-可用 */
     private Integer status;
 

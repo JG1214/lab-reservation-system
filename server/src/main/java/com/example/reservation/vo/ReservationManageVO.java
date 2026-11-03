@@ -29,4 +29,10 @@ public class ReservationManageVO extends ReservationVO {
 
     /** 审核时间 */
     private LocalDateTime auditTime;
+
+    /** 实际使用人数（来自 usage_record，未登记时为 null） */
+    private Integer actualPeople;
+
+    /** 使用状态：1-正常，2-部分使用，3-失约；未登记时为 null */
+    private Integer useStatus;
 }

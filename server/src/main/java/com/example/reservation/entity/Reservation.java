@@ -40,6 +40,9 @@ public class Reservation {
     /** 结束时间 */
     private LocalTime endTime;
 
+    /** 预约人数（参与人数，用于容量控制，默认 1） */
+    private Integer peopleCount;
+
     /** 预约用途 */
     private String purpose;
 
@@ -54,6 +57,12 @@ public class Reservation {
 
     /** 审核时间 */
     private LocalDateTime auditTime;
+
+    /** 取消原因（仅已取消状态有值） */
+    private String cancelReason;
+
+    /** 取消时间（仅已取消状态有值） */
+    private LocalDateTime cancelTime;
 
     /** 创建时间（自动填充） */
     @TableField(fill = FieldFill.INSERT)

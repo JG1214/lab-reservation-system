@@ -9,10 +9,13 @@ import com.example.reservation.config.RedisProperties;
 import com.example.reservation.entity.Classroom;
 import com.example.reservation.entity.Reservation;
 import com.example.reservation.entity.SysUser;
+import com.example.reservation.entity.UsageRecord;
 import com.example.reservation.mapper.ClassroomMapper;
 import com.example.reservation.mapper.ReservationMapper;
 import com.example.reservation.mapper.SysUserMapper;
+import com.example.reservation.mapper.UsageRecordMapper;
 import com.example.reservation.service.StatsService;
+import com.example.reservation.vo.ActualUsageVO;
 import com.example.reservation.vo.OverviewVO;
 import com.example.reservation.vo.TimeDistributionVO;
 import com.example.reservation.vo.TrendVO;
@@ -58,6 +61,9 @@ public class StatsServiceImpl implements StatsService {
     private SysUserMapper sysUserMapper;
 
     @Resource
+    private UsageRecordMapper usageRecordMapper;
+
+    @Resource
     private RedisCache redisCache;
 
     @Resource
@@ -84,7 +90,146 @@ public class StatsServiceImpl implements StatsService {
         vo.setClassroomCount(classroomMapper.selectCount(new LambdaQueryWrapper<Classroom>()));
         // 用户总数（含管理员与已禁用账号）
         vo.setUserCount(sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()));
+        // 待登记：已通过但尚未登记使用记录的预约条数（使用登记工作量口径，V4.0 新增）
+        Long recorded = usageRecordMapper.selectCount(new LambdaQueryWrapper<UsageRecord>());
+        Long approved = reservationMapper.selectCount(new LambdaQueryWrapper<Reservation>()
+                .eq(Reservation::getStatus, Constants.RES_STATUS_APPROVED));
+        vo.setPendingUsageCount(Math.max(0L, approved - (recorded == null ? 0L : recorded)));
+        // 今日实际使用人数：使用日期为今日且非失约的记录，实际人数合计（V4.0 新增）
+        List<UsageRecord> todayRecords = usageRecordMapper.selectList(new LambdaQueryWrapper<UsageRecord>()
+                .eq(UsageRecord::getUseDate, today)
+                .ne(UsageRecord::getUseStatus, Constants.USE_STATUS_NO_SHOW));
+        vo.setTodayActualPeople(todayRecords.stream()
+                .mapToLong(r -> r.getActualPeople() == null ? 0L : r.getActualPeople())
+                .sum());
         return vo;
+    }
+
+    /**
+     * 实际使用统计（需求设计文档 V4.0 1.3 管理端「数据统计」第 4 项）
+     *
+     * <p>与 usageRate 的口径差异（两者并列展示，互不覆盖）：
+     * 使用率衡量「排期被预约占用了多少」，本方法衡量「预约最终被真实使用了多少」。
+     * 实际使用小时 = 该条预约的窗口内分钟数 × (实际人数 ÷ 预约人数)，
+     * 全员到场时退化为预约占用小时，部分使用按人数折算，失约折算为 0。
+     */
+    @Override
+    public List<ActualUsageVO> actualUsage(String startDate, String endDate) {
+        DateRange range = resolveRange(startDate, endDate);
+        String cacheKey = statsCacheKey("actual-usage", range);
+        List<ActualUsageVO> cached = redisCache.getObject(cacheKey, new TypeReference<>() {
+        });
+        if (cached != null) {
+            return cached;
+        }
+
+        // 区间内已登记的使用记录（含正常/部分/失约），以登记日期归属区间
+        List<UsageRecord> records = usageRecordMapper.selectList(new LambdaQueryWrapper<UsageRecord>()
+                .ge(UsageRecord::getUseDate, range.start)
+                .le(UsageRecord::getUseDate, range.end));
+
+        // 记录 → 预约原文（取预约人数与时段，用于折算实际使用小时）
+        Map<Long, Reservation> reservationMap = new HashMap<>();
+        if (!records.isEmpty()) {
+            List<Long> reservationIds = records.stream().map(UsageRecord::getReservationId).distinct().toList();
+            reservationMap = reservationMapper.selectBatchIds(reservationIds).stream()
+                    .collect(Collectors.toMap(Reservation::getId, r -> r, (a, b) -> a));
+        }
+
+        // 按教室聚合：条数/人数/折算分钟
+        Map<Long, ActualAgg> aggByClassroom = new HashMap<>();
+        for (UsageRecord record : records) {
+            ActualAgg agg = aggByClassroom.computeIfAbsent(record.getClassroomId(), k -> new ActualAgg());
+            agg.recordedCount++;
+            agg.actualPeople += record.getActualPeople() == null ? 0 : record.getActualPeople();
+            Integer useStatus = record.getUseStatus();
+            if (useStatus != null && useStatus == Constants.USE_STATUS_NO_SHOW) {
+                agg.noShowCount++;
+            } else if (useStatus != null && useStatus == Constants.USE_STATUS_PARTIAL) {
+                agg.partialCount++;
+            } else if (useStatus != null && useStatus == Constants.USE_STATUS_NORMAL) {
+                agg.normalCount++;
+            }
+            Reservation reservation = reservationMap.get(record.getReservationId());
+            if (reservation == null) {
+                continue;
+            }
+            int planned = reservation.getPeopleCount() == null ? 1 : reservation.getPeopleCount();
+            agg.plannedPeople += planned;
+            long occupancyMinutes = clippedMinutes(reservation);
+            int actual = record.getActualPeople() == null ? 0 : record.getActualPeople();
+            // 按人数折算：全员到场 = 全额占用；部分使用按比例；失约 = 0
+            agg.actualMinutes += planned <= 0 ? 0 : Math.round(occupancyMinutes * (actual * 1.0 / planned));
+        }
+
+        // 区间内非驳回预约（待审核 0 / 已通过 1 / 已取消 3）：一次查询同时派生失约率分母与取消率分子分母
+        List<Reservation> nonRejected = reservationMapper.selectList(new LambdaQueryWrapper<Reservation>()
+                .in(Reservation::getStatus, Constants.RES_STATUS_PENDING,
+                        Constants.RES_STATUS_APPROVED, Constants.RES_STATUS_CANCELED)
+                .ge(Reservation::getReserveDate, range.start)
+                .le(Reservation::getReserveDate, range.end));
+        // 失约率分母：区间内各教室已通过的预约条数（未登记的失约同样计入分母，避免"不登记就一直不计失约"）
+        Map<Long, Long> approvedCountByClassroom = nonRejected.stream()
+                .filter(r -> r.getStatus() == Constants.RES_STATUS_APPROVED)
+                .collect(Collectors.groupingBy(Reservation::getClassroomId, Collectors.counting()));
+        // 取消率（需求文档 V4.1 2.5 第 6 条）：分子=区间内已取消条数，分母=区间内非驳回条数（驳回不计入分母）
+        Map<Long, Long> cancelledCountByClassroom = nonRejected.stream()
+                .filter(r -> r.getStatus() == Constants.RES_STATUS_CANCELED)
+                .collect(Collectors.groupingBy(Reservation::getClassroomId, Collectors.counting()));
+        Map<Long, Long> nonRejectedCountByClassroom = nonRejected.stream()
+                .collect(Collectors.groupingBy(Reservation::getClassroomId, Collectors.counting()));
+
+        long days = ChronoUnit.DAYS.between(range.start, range.end) + 1;
+        double denominatorHours = days * Constants.DAILY_AVAILABLE_HOURS;
+
+        List<Classroom> rooms = classroomMapper.selectList(new LambdaQueryWrapper<Classroom>());
+        List<ActualUsageVO> result = new ArrayList<>(rooms.size());
+        for (Classroom room : rooms) {
+            ActualAgg agg = aggByClassroom.get(room.getId());
+            ActualUsageVO vo = new ActualUsageVO();
+            vo.setClassroomId(room.getId());
+            vo.setName(room.getName());
+            vo.setBuilding(room.getBuilding());
+            vo.setRoomNo(room.getRoomNo());
+            vo.setType(room.getType());
+            vo.setCapacity(room.getCapacity());
+            if (agg == null) {
+                vo.setRecordedCount(0L);
+                vo.setNormalCount(0L);
+                vo.setPartialCount(0L);
+                vo.setNoShowCount(0L);
+                vo.setPlannedPeople(0L);
+                vo.setActualPeople(0L);
+                vo.setActualHours(0.0);
+                vo.setActualUsageRate(0.0);
+                vo.setNoShowRate(0.0);
+            } else {
+                // 折算小时先按「单日 14h」封顶，保证实际使用率恒 ≤ 100
+                double actualHours = Math.min(agg.actualMinutes, Constants.DAILY_AVAILABLE_HOURS * 60L * days) / 60.0;
+                vo.setRecordedCount(agg.recordedCount);
+                vo.setNormalCount(agg.normalCount);
+                vo.setPartialCount(agg.partialCount);
+                vo.setNoShowCount(agg.noShowCount);
+                vo.setPlannedPeople(agg.plannedPeople);
+                vo.setActualPeople(agg.actualPeople);
+                vo.setActualHours(round1(actualHours));
+                vo.setActualUsageRate(round1(denominatorHours == 0 ? 0 : actualHours / denominatorHours * 100));
+                // 失约率 = 失约记录数 / 已通过预约数，分母取该教室区间内已通过预约的条数（与接口清单 6.2 口径一致）
+                long approvedCount = approvedCountByClassroom.getOrDefault(room.getId(), 0L);
+                vo.setNoShowRate(round1(approvedCount == 0 ? 0 : agg.noShowCount * 100.0 / approvedCount));
+            }
+            // 取消率与「是否有使用登记」无关，两个分支都要填，否则无登记记录的实验室会漏统计
+            long cancelledCount = cancelledCountByClassroom.getOrDefault(room.getId(), 0L);
+            long nonRejectedCount = nonRejectedCountByClassroom.getOrDefault(room.getId(), 0L);
+            vo.setCancelledCount(cancelledCount);
+            vo.setCancelRate(round1(nonRejectedCount == 0 ? 0 : cancelledCount * 100.0 / nonRejectedCount));
+            result.add(vo);
+        }
+        result.sort(Comparator.comparing(ActualUsageVO::getRecordedCount, Comparator.reverseOrder())
+                .thenComparing(ActualUsageVO::getActualUsageRate, Comparator.reverseOrder())
+                .thenComparing(ActualUsageVO::getClassroomId));
+        redisCache.setObject(cacheKey, result, redisProperties.getCache().getStatsTtlSeconds());
+        return result;
     }
 
     @Override
@@ -300,6 +445,17 @@ public class StatsServiceImpl implements StatsService {
     /** 数值保留 1 位小数（四舍五入） */
     private double round1(double value) {
         return BigDecimal.valueOf(value).setScale(1, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    /** 单教室实际使用聚合中间结果 */
+    private static final class ActualAgg {
+        private long recordedCount;
+        private long normalCount;
+        private long partialCount;
+        private long noShowCount;
+        private long plannedPeople;
+        private long actualPeople;
+        private long actualMinutes;
     }
 
     /** 日期区间（开始/结束均含） */

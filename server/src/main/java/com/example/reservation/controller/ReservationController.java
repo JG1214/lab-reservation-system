@@ -4,6 +4,7 @@ import com.example.reservation.common.PageResult;
 import com.example.reservation.common.Result;
 import com.example.reservation.dto.AuditDTO;
 import com.example.reservation.dto.BatchAuditDTO;
+import com.example.reservation.dto.CancelDTO;
 import com.example.reservation.dto.ReservationDTO;
 import com.example.reservation.service.ReservationService;
 import com.example.reservation.vo.CalendarVO;
@@ -83,10 +84,10 @@ public class ReservationController {
     /**
      * 取消预约：仅本人；待审核/已通过 → 已取消；开始前 1 小时内禁止取消
      */
-    @Operation(summary = "预约-取消", description = "仅本人可取消；待审核(0)/已通过(1)→已取消(3)；开始前 1 小时内禁止取消")
+    @Operation(summary = "预约-取消", description = "仅本人可取消；待审核(0)/已通过(1)→已取消(3)；开始前 1 小时内禁止取消；取消原因必填")
     @PutMapping("/{id}/cancel")
-    public Result<Void> cancelReservation(@PathVariable Long id) {
-        reservationService.cancelReservation(id);
+    public Result<Void> cancelReservation(@PathVariable Long id, @RequestBody CancelDTO dto) {
+        reservationService.cancelReservation(id, dto == null ? null : dto.getReason());
         return Result.<Void>success("取消成功", null);
     }
 
@@ -102,8 +103,10 @@ public class ReservationController {
                                                               @RequestParam(required = false) String startDate,
                                                               @RequestParam(required = false) String endDate,
                                                               @RequestParam(required = false) String keyword,
-                                                              @RequestParam(required = false) Long classroomId) {
-        return Result.success(reservationService.pageManage(page, size, status, startDate, endDate, keyword, classroomId));
+                                                              @RequestParam(required = false) Long classroomId,
+                                                              @RequestParam(required = false) Integer useStatus) {
+        return Result.success(reservationService.pageManage(page, size, status, startDate, endDate, keyword,
+                classroomId, useStatus));
     }
 
     /**
@@ -117,8 +120,10 @@ public class ReservationController {
                                    @RequestParam(required = false) String endDate,
                                    @RequestParam(required = false) String keyword,
                                    @RequestParam(required = false) Long classroomId,
+                                   @RequestParam(required = false) Integer useStatus,
                                    HttpServletResponse response) throws IOException {
-        List<ReservationExportVO> list = reservationService.listExport(status, startDate, endDate, keyword, classroomId);
+        List<ReservationExportVO> list = reservationService.listExport(status, startDate, endDate, keyword,
+                classroomId, useStatus);
         // 文件名带时间戳，避免同名覆盖；中文名按 RFC 5987 编码（filename*）兼容主流浏览器
         String fileName = "预约记录_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + ".xlsx";
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

@@ -35,6 +35,12 @@ public class UserContext {
         return user != null && user.role() != null && user.role() == Constants.ROLE_ADMIN;
     }
 
+    /** 当前登录用户是否为教师（未登录返回 false；用于教师专属预约配额） */
+    public static boolean isTeacher() {
+        LoginUser user = HOLDER.get();
+        return user != null && user.role() != null && user.role() == Constants.ROLE_TEACHER;
+    }
+
     /** 给定用户 ID 是否为当前登录用户本人（未登录返回 false；R3/R5 用途可见性共用） */
     public static boolean isSelf(Long userId) {
         LoginUser user = HOLDER.get();

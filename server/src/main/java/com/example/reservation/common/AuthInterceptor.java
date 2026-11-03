@@ -68,7 +68,17 @@ public class AuthInterceptor implements HandlerInterceptor {
         Integer role = Integer.valueOf(String.valueOf(claims.get("role")));
 
         // 管理员专属接口：校验角色
-        if (isAdminPath(request.getRequestURI()) && role != Constants.ROLE_ADMIN) {
+        String requestUri = request.getRequestURI();
+        // /api/slot/classroom/** 是学生端查询某实验室某日可用时段的只读接口（需求文档 V4.0 规则 3 前端实时展示），
+        // 任何已登录角色均可访问，故从管理员前缀判定中排除，避免学生/教师被误拦成 403
+        if (isAdminPath(requestUri) && !isSlotPublicPath(requestUri)
+                && role != Constants.ROLE_ADMIN) {
+            return reject(response, ResultCode.FORBIDDEN.getCode(), ResultCode.FORBIDDEN.getMessage());
+        }
+
+        // 教师或管理员专属接口（需求文档 V4.0 1.2）：白名单式判定，学生 Token 返回 403
+        if (isTeacherOrAdminPath(requestUri)
+                && role != Constants.ROLE_ADMIN && role != Constants.ROLE_TEACHER) {
             return reject(response, ResultCode.FORBIDDEN.getCode(), ResultCode.FORBIDDEN.getMessage());
         }
 
@@ -142,6 +152,25 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (uri.startsWith(Constants.RESERVATION_BATCH_AUDIT_PATH)
                 || uri.matches(Constants.RESERVATION_AUDIT_PATH_REGEX)) {
             return true;
+        }
+        return false;
+    }
+
+    /** 判断是否为开放时段的只读对客接口（学生端/教师端查询可用时段，登录即可访问） */
+    private boolean isSlotPublicPath(String uri) {
+        return uri.startsWith(Constants.SLOT_PUBLIC_PATH_PREFIX);
+    }
+
+    /**
+     * 判断是否为教师专属接口（需求文档 V4.0 1.2）
+     * 白名单式：仅 Constants.TEACHER_API_PREFIXES 中列出的前缀对教师开放，
+     * 教师不具备审核、资源维护、时段配置、使用登记权限，故不在此表内的接口一律按「登录即可」处理。
+     */
+    private boolean isTeacherOrAdminPath(String uri) {
+        for (String prefix : Constants.TEACHER_API_PREFIXES) {
+            if (uri.startsWith(prefix)) {
+                return true;
+            }
         }
         return false;
     }

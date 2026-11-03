@@ -37,15 +37,18 @@ public class ClassroomVO {
     /** 备注描述 */
     private String description;
 
+    /** 开放要求（准入门槛，学生端教室详情页展示） */
+    private String openRequirement;
+
     /** 状态：0-停用，1-可用（学生端列表仅返回可用教室） */
     private Integer status;
 
     /** 实时状态标签：当前空闲 / 使用中（口径见 ClassroomService 实现注释） */
     private String statusLabel;
 
-    /** 今日剩余可预约整点时段数（需求文档 1.3 冲优项「今日剩余 X 时段」，负责人 2026-09-12 授权；
-     *  口径：08:00-22:00 划分为 14 个整点时段，与今日已通过预约重叠（R1 冲突公式）的时段扣除） */
-    private Integer todayRemainingSlots;
+    /** 今日剩余可约人数（需求文档 V4.1 2.5 第 6 条；容量口径与教室详情页开放时段 slotCapacity 同源）：
+     *  Σ(今日生效且未结束时段的 slotCapacity − 该时段已通过预约人数)，已过时段不计；无生效时段时为 0 */
+    private Integer todayRemainingPeople;
 
     /** 指定日期（默认当天）该教室已通过预约占用时段 */
     private List<OccupiedSlotVO> occupiedSlots;

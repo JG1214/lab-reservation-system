@@ -23,6 +23,9 @@ public class ReservationDTO {
     /** 结束时间（必填，HH:mm） */
     private String endTime;
 
+    /** 预约人数（参与人数，缺省按 1 处理；用于时段容量控制） */
+    private Integer peopleCount;
+
     /** 预约用途（必填） */
     private String purpose;
 }

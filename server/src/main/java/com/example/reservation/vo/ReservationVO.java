@@ -38,6 +38,9 @@ public class ReservationVO {
     /** 结束时间（HH:mm） */
     private String endTime;
 
+    /** 预约人数 */
+    private Integer peopleCount;
+
     /** 预约用途 */
     private String purpose;
 
@@ -49,6 +52,12 @@ public class ReservationVO {
 
     /** 审核时间（待审核为 null） */
     private LocalDateTime auditTime;
+
+    /** 取消原因（仅已取消状态有值） */
+    private String cancelReason;
+
+    /** 取消时间（仅已取消状态有值） */
+    private LocalDateTime cancelTime;
 
     /** 创建时间 */
     private LocalDateTime createTime;

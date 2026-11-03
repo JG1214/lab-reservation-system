@@ -29,4 +29,10 @@ public class OverviewVO {
 
     /** 用户总数（含管理员与已禁用账号） */
     private Long userCount;
+
+    /** 待登记使用记录条数 = 已通过预约数 − 已登记使用记录数（V4.0 新增，反映登记工作量） */
+    private Long pendingUsageCount;
+
+    /** 今日实际使用人数合计（使用日期为今日且非失约，V4.0 新增） */
+    private Long todayActualPeople;
 }

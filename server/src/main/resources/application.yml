@@ -29,7 +29,7 @@ spring:
     # 注意：连错端口不会启动失败，而是所有接口返回 HTTP 200 + body code=500，排查时先看后端日志的 Connection refused
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/reservation?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
     username: ${MYSQL_USERNAME:root}
-    password: ${MYSQL_PASSWORD:root}
+    password: ${MYSQL_PASSWORD:123456}
 
 mybatis-plus:
   configuration:

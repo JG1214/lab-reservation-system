@@ -1,5 +1,6 @@
 package com.example.reservation.service;
 
+import com.example.reservation.vo.ActualUsageVO;
 import com.example.reservation.vo.OverviewVO;
 import com.example.reservation.vo.TimeDistributionVO;
 import com.example.reservation.vo.TrendVO;
@@ -31,6 +32,14 @@ public interface StatsService {
      * @param endDate   区间结束（yyyy-MM-dd，可选，缺省近 30 天）
      */
     List<UsageRateVO> usageRate(String startDate, String endDate);
+
+    /**
+     * 实际使用统计（需求设计文档 V4.0 1.3 管理端「数据统计」第 4 项）
+     * 口径：以 usage_record 为准，按教室汇总应到/正常/部分/失约条数、预约人数与实际人数合计、
+     * 实际使用小时数（按 实际人数/预约人数 折算预约时长后汇总，裁剪到每日 14h 上限）、
+     * 实际使用率（实际小时 ÷（天数 × 14h）× 100）与失约率（失约条数 ÷ 应到条数 × 100）
+     */
+    List<ActualUsageVO> actualUsage(String startDate, String endDate);
 
     /**
      * 月度预约趋势（折线图）
