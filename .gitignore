@@ -24,6 +24,8 @@ docs/qa/**/evidence/
 # ===== 日志与本地备份 =====
 *.log
 logs/
+.build/
+.backup/
 *.bak
 *.orig
 *.tmp
@@ -60,3 +62,15 @@ docs/e2e/*.log
 .trae/
 docs/superpowers/
 database/diagram/
+
+# ===== 本地调试临时产物（不入库）=====
+.tmp-*
+_tmp/
+/%SystemDrive%/
+e2e-probe.log
+e2e-run.log
+pw-install.log
+vite-dev.log
+web/debug-*.mjs
+web/debug-*.json
+
