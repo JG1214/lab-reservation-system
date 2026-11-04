@@ -158,11 +158,12 @@ public class ReservationController {
     /**
      * 日历总览区间查询（R5 亮点功能）：教室可选，区间必填，返回全部状态预约（色块数据）
      */
-    @Operation(summary = "预约-日历总览区间查询", description = "classroomId 可选（空=全部教室）；startDate/endDate 必填且跨度 ≤366 天；返回区间内全部状态预约")
+    @Operation(summary = "预约-日历总览区间查询", description = "classroomId 可选（空=全部教室）；startDate/endDate 必填且跨度 ≤366 天；statuses 可选（0/1/2/3，不传=全部状态）")
     @GetMapping("/calendar")
     public Result<List<CalendarVO>> listCalendar(@RequestParam(required = false) Long classroomId,
                                                  @RequestParam String startDate,
-                                                 @RequestParam String endDate) {
-        return Result.success(reservationService.listCalendar(classroomId, startDate, endDate));
+                                                 @RequestParam String endDate,
+                                                 @RequestParam(required = false) List<Integer> statuses) {
+        return Result.success(reservationService.listCalendar(classroomId, startDate, endDate, statuses));
     }
 }

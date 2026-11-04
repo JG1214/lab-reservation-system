@@ -79,8 +79,9 @@ public interface ReservationService {
 
     /**
      * 日历总览区间查询（R5 亮点功能，需求文档 2.4 第 7 页）
-     * 返回区间内全部状态预约（色块数据），附带教室展示字段；
-     * classroomId 为空表示全部教室；startDate/endDate 必填且跨度 ≤ 366 天
+     * 返回区间内预约（色块数据），附带教室展示字段；
+     * classroomId 为空表示全部教室；startDate/endDate 必填且跨度 ≤ 366 天；
+     * statuses 为空表示全部状态，否则仅返回所选状态（0 待审核 / 1 已通过 / 2 已驳回 / 3 已取消）
      */
-    List<CalendarVO> listCalendar(Long classroomId, String startDate, String endDate);
+    List<CalendarVO> listCalendar(Long classroomId, String startDate, String endDate, List<Integer> statuses);
 }

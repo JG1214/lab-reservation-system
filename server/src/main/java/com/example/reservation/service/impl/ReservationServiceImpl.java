@@ -1,5 +1,6 @@
 package com.example.reservation.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -603,7 +604,7 @@ public class ReservationServiceImpl implements ReservationService {
     }
 
     @Override
-    public List<CalendarVO> listCalendar(Long classroomId, String startDate, String endDate) {
+    public List<CalendarVO> listCalendar(Long classroomId, String startDate, String endDate, List<Integer> statuses) {
         // startDate/endDate 必填（日历需要明确区间，防止全表扫描）
         if (StrUtil.isBlank(startDate)) {
             throw new BusinessException(Constants.CALENDAR_START_REQUIRED_MSG);
@@ -625,9 +626,10 @@ public class ReservationServiceImpl implements ReservationService {
             ClassroomValidator.requireExists(classroomMapper.selectById(classroomId));
         }
 
-        // 区间内全部状态预约（色块覆盖四状态），按教室/日期/开始时间排序，前端按月/周聚合
+        // 区间内预约（色块数据）：statuses 为空=全部状态，否则仅所选状态（前端默认只看待审核+已通过）
         List<Reservation> list = reservationMapper.selectList(new LambdaQueryWrapper<Reservation>()
                 .eq(classroomId != null, Reservation::getClassroomId, classroomId)
+                .in(CollUtil.isNotEmpty(statuses), Reservation::getStatus, statuses)
                 .ge(Reservation::getReserveDate, start)
                 .le(Reservation::getReserveDate, end)
                 .orderByAsc(Reservation::getClassroomId)

@@ -1,18 +1,34 @@
 <template>
   <div class="page-container">
     <el-card shadow="never">
-      <!-- 顶部工具栏：教室筛选 + 视图切换 + 状态图例 -->
+      <!-- 顶部工具栏：教室筛选 + 状态筛选 + 视图切换 + 状态图例 -->
       <div class="toolbar">
         <div class="toolbar-left">
           <span class="page-title">预约日历总览</span>
           <el-select
             v-model="selectedClassroomId"
+            class="room-filter"
             placeholder="全部教室"
             clearable
             style="width: 220px"
             @change="handleClassroomChange"
           >
             <el-option v-for="c in classrooms" :key="c.id" :label="`${c.name}（${c.roomNo}）`" :value="c.id" />
+          </el-select>
+          <el-select
+            v-model="selectedStatuses"
+            class="status-filter"
+            multiple
+            collapse-tags
+            clearable
+            placeholder="全部状态"
+            style="width: 200px"
+            @change="loadEvents"
+          >
+            <el-option label="待审核" :value="0" />
+            <el-option label="已通过" :value="1" />
+            <el-option label="已驳回" :value="2" />
+            <el-option label="已取消" :value="3" />
           </el-select>
         </div>
         <div class="toolbar-right">
@@ -135,6 +151,8 @@ const loading = ref(false)
 const classrooms = ref([])
 const selectedClassroomId = ref(null)
 const viewType = ref('dayGridMonth')
+// 状态筛选：默认只看待审核 + 已通过（有效预约），清空 = 全部状态
+const selectedStatuses = ref([0, 1])
 
 const calendarEl = ref(null)
 let calendar = null
@@ -180,6 +198,9 @@ async function loadEvents() {
     const params = { startDate: rangeStart, endDate: rangeEnd }
     if (selectedClassroomId.value) {
       params.classroomId = selectedClassroomId.value
+    }
+    if (selectedStatuses.value.length) {
+      params.statuses = selectedStatuses.value.join(',')
     }
     const res = await getCalendarReservations(params)
     const items = (res.data || []).map((r) => toEvent(r))

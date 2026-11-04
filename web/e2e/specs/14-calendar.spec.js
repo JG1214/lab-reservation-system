@@ -18,8 +18,8 @@ const PATH = '/student/calendar'
 
 /**
  * 用途后缀：每次运行唯一。
- * 日历会展示区间内「全部状态」的预约，而「已取消/已驳回」是终态、无法经接口删除，
- * 固定用途会让历史遗留记录与本轮色块同时命中同一文案（严格模式下多处匹配即失败）。
+ * 日历默认只展示「待审核 + 已通过」，但「已取消/已驳回」是终态、无法经接口删除，
+ * 一旦把状态筛选清空，历史遗留记录会与本轮色块同时命中同一文案（严格模式下多处匹配即失败）。
  */
 const RUN = String(Date.now()).slice(-6)
 const tag = (t) => e2ePurpose(`${t}-${RUN}`)
@@ -199,7 +199,7 @@ test.describe('预约日历总览', () => {
     // 选择教室 1 → 请求带 classroomId，且教室 2 的色块消失
     const [resp] = await Promise.all([
       page.waitForResponse((r) => r.url().includes('/api/reservation/calendar')),
-      pickOption(page, page.locator('.toolbar-left .el-select'), `${room1.name}（${room1.roomNo}）`)
+      pickOption(page, page.locator('.toolbar-left .room-filter'), `${room1.name}（${room1.roomNo}）`)
     ])
     expect(new URL(resp.url()).searchParams.get('classroomId')).toBe('1')
     await expect(ev1).toBeVisible()
@@ -207,5 +207,66 @@ test.describe('预约日历总览', () => {
 
     await tryCancel(request, token, id1)
     await tryCancel(request, token, id2)
+  })
+
+  test('状态筛选：默认仅拉取待审核与已通过，切换后按所选状态着色', async ({ page, request }) => {
+    await openCalendar(page)
+    const token = await pageToken(page)
+    await apiLogin(request, 'admin')
+    const date = futureDate(4)
+
+    // 待审核(0)：默认可见
+    const purposePending = tag('14-筛选状态待审核')
+    const sPending = await freeSlotFor(request, token, 1, [date], [SLOTS.morning, SLOTS.noon])
+    const pendingId = await seedPending(request, token, { classroomId: 1, ...sPending, purpose: purposePending })
+
+    // 已取消(3)：默认不可见，切到「已取消」后可见
+    const purposeCanceled = tag('14-筛选状态已取消')
+    const sCanceled = await freeSlotFor(request, token, 1, [date], [SLOTS.noon, SLOTS.afternoon], [sPending])
+    const canceledId = await seedPending(request, token, { classroomId: 1, ...sCanceled, purpose: purposeCanceled })
+    await tryCancel(request, token, canceledId)
+
+    // 默认请求：statuses=0,1
+    const [defaultResp] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/api/reservation/calendar')),
+      page.reload()
+    ])
+    expect(new URL(defaultResp.url()).searchParams.get('statuses')).toBe('0,1')
+
+    const evPending = page.locator(`.fc-daygrid-event[title*="${purposePending}"]`)
+    const evCanceled = page.locator(`.fc-daygrid-event[title*="${purposeCanceled}"]`)
+    await expect(evPending).toBeVisible()
+    await expect(evCanceled).toHaveCount(0)
+
+    // 追加「已取消」→ 请求带上 3，已取消色块出现
+    const statusTrigger = page.locator('.toolbar-left .status-filter')
+    const [canceledResp] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/api/reservation/calendar')),
+      (async () => {
+        await statusTrigger.click()
+        await page.locator('.el-select-dropdown:visible')
+          .locator('.el-select-dropdown__item', { hasText: '已取消' }).first().click()
+      })()
+    ])
+    await page.keyboard.press('Escape')
+    expect(new URL(canceledResp.url()).searchParams.get('statuses')).toBe('0,1,3')
+    await expect(evCanceled).toBeVisible()
+    await expect(evCanceled).toHaveClass(/res-ev-3/)
+
+    // 取消选中「待审核」→ 只保留 1,3，待审核色块消失
+    const [narrowResp] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/api/reservation/calendar')),
+      (async () => {
+        await statusTrigger.click()
+        await page.locator('.el-select-dropdown:visible')
+          .locator('.el-select-dropdown__item', { hasText: '待审核' }).first().click()
+        await page.keyboard.press('Escape')
+      })()
+    ])
+    expect(new URL(narrowResp.url()).searchParams.get('statuses')).toBe('1,3')
+    await expect(evPending).toHaveCount(0)
+    await expect(evCanceled).toBeVisible()
+
+    await tryCancel(request, token, pendingId)
   })
 })
