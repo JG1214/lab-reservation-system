@@ -69,6 +69,7 @@ _tmp/
 /%SystemDrive%/
 e2e-probe.log
 e2e-run.log
+*.pid
 pw-install.log
 vite-dev.log
 web/debug-*.mjs

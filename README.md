@@ -51,6 +51,7 @@ lab-reservation-system/
 ├── web/                          # 前端工程（Vue 3.4 + Vite 5，唯一代码源）
 │   ├── src/                      # 页面 / 组件 / 路由 / 接口封装
 │   └── e2e/                      # Playwright E2E（specs + helpers）
+├── scripts/restore-env.ps1       # 本机环境一键恢复：启动 / 体检 / 停止 / 初始化数据库
 ├── database/init_db.sql          # 建库建表 + 基线数据（自包含，可重复执行）
 ├── materials/                    # 答辩 PPT 与实训报告
 ├── docs/
@@ -119,6 +120,30 @@ cd web
 npm ci
 npm run dev                                   # 浏览器访问 http://127.0.0.1:5173
 ```
+
+### 方式三：本机直连（不使用 Docker，一键拉起）
+
+答辩机或已装好 JDK 21 / Maven 3.9 / Node 22 / MySQL 8 的机器，可直接用 [restore-env.ps1](scripts/restore-env.ps1) 拉起整套环境：
+
+```powershell
+# 一键：检查工具链与端口 → 校验数据库 → 启动后端(8080) → 启动前端(5173)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-env.ps1
+
+# 只做体检，不改动任何进程（工具链 / 端口 / 后端登录探活 / 前端探活）
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-env.ps1 -Mode status
+
+# 停止脚本启动的服务（按 PID 文件 + 端口兜底，可清理非本脚本启动的残留进程）
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-env.ps1 -Mode stop
+
+# 需要重置数据时全量重建（DROP + CREATE + 种子数据，会清空现有数据，请先备份）
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-env.ps1 -Mode all -InitDb
+```
+
+- 工具自动探测：`mvn` / `node` / `npm` / `mysql` 在 PATH 上找不到时回退到本机常用安装路径；`JAVA_HOME` 指向无效父目录时按 PATH 上的 `java` 反推修正。
+- 数据库连接沿用 `application.yml` 默认值（`127.0.0.1:3306`，`root` / `123456`），密码可用 `$env:MYSQL_PWD` 覆盖。
+- Redis 6379 未启动时脚本只提示，后端自动降级为纯 JWT + 直接查库，功能不受影响。
+- 日志写入 `logs/backend.log`、`logs/vite.log`；进程号写入 `scripts/.restore-env.pid`。
+- E2E 回归会产生大量造数，跑完后如需清回基线：`DELETE FROM reservation WHERE DATE(create_time) >= '2026-11-01'`（保留 13 条种子预约）。
 
 演示账号：管理员 `admin / admin123`；教师 `teacher / 123`；学生 `zhangsan / 123456`（另有 `lisi`、`wangwu`、`zhaoliu`，密码均为 `123456`）。
 
